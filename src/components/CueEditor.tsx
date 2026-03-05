@@ -7,9 +7,10 @@ import type { CueType, CueStatus } from "@/types";
 
 interface CueEditorProps {
   projectId: string;
+  broadcast?: (msg: any) => void;
 }
 
-export function CueEditor({ projectId }: CueEditorProps) {
+export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore } = useStageStore();
   const isEditing = !!editingCue;
 
@@ -105,7 +106,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
 
       // Update the store with the new/updated cue
       if (isEditing) {
-        updateCueInStore(savedCue.id, {
+        const updates = {
           type: savedCue.type,
           label: savedCue.label,
           number: savedCue.number,
@@ -115,9 +116,11 @@ export function CueEditor({ projectId }: CueEditorProps) {
           preWait: savedCue.preWait,
           followTime: savedCue.followTime,
           updatedAt: savedCue.updatedAt || new Date().toISOString(),
-        });
+        };
+        updateCueInStore(savedCue.id, updates);
+        broadcast?.({ type: "cue-update", cueId: savedCue.id, updates });
       } else if (lineId && sceneId) {
-        addCueToLine(sceneId, lineId, {
+        const newCue = {
           id: savedCue.id,
           type: savedCue.type,
           label: savedCue.label,
@@ -132,7 +135,9 @@ export function CueEditor({ projectId }: CueEditorProps) {
           followTime: savedCue.followTime,
           createdBy: savedCue.createdBy,
           updatedAt: savedCue.updatedAt || new Date().toISOString(),
-        });
+        };
+        addCueToLine(sceneId, lineId, newCue);
+        broadcast?.({ type: "cue-add", sceneId, lineId, cue: newCue });
       }
 
       closeCueEditor();
@@ -159,6 +164,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
       // Remove from store
       if (editingCue.lineId && editingCue.sceneId) {
         removeCueFromLine(editingCue.sceneId, editingCue.lineId, editingCue.id);
+        broadcast?.({ type: "cue-delete", sceneId: editingCue.sceneId, lineId: editingCue.lineId, cueId: editingCue.id });
       }
 
       // Renumber remaining cues of same type

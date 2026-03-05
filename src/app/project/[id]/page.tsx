@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useSession } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { useYjs } from "@/hooks/useYjs";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Header } from "@/components/Header";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { ScriptView } from "@/components/ScriptView";
@@ -41,6 +42,9 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     userName: session?.user?.name || "Anonymous",
     userRole: myRole,
   });
+
+  // Real-time document sync
+  const { broadcast } = useRealtimeSync(yjs.doc, (session?.user as any)?.id || "anonymous");
 
   // Sync presence to store
   useEffect(() => {
@@ -135,14 +139,14 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
         {showSidePanel && cuePanelSide === "left" && <CueSidePanel />}
 
         {/* Script panel */}
-        <ScriptView />
+        <ScriptView broadcast={broadcast} />
 
         {/* Cue side panel on right */}
         {showSidePanel && cuePanelSide === "right" && <CueSidePanel />}
       </div>
 
       {/* Cue editor modal */}
-      {isCueEditorOpen && <CueEditor projectId={params.id} />}
+      {isCueEditorOpen && <CueEditor projectId={params.id} broadcast={broadcast} />}
 
       {/* Settings modal */}
       {isSettingsOpen && <Settings projectId={params.id} myRole={myRole} />}

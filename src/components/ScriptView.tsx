@@ -13,7 +13,11 @@ const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
   { value: "TRANSITION", label: "Transition" },
 ];
 
-export function ScriptView() {
+interface ScriptViewProps {
+  broadcast?: (msg: any) => void;
+}
+
+export function ScriptView({ broadcast }: ScriptViewProps) {
   const {
     activeRole,
     projectId,
@@ -177,6 +181,7 @@ export function ScriptView() {
 
       const scene = await res.json();
       addScene(scene);
+      broadcast?.({ type: "scene-add", scene });
       setShowAddScene(false);
       setNewSceneTitle("");
       setNewSceneNum(String(Number(newSceneNum) + 1));
@@ -213,6 +218,7 @@ export function ScriptView() {
 
       const line = await res.json();
       addLineToScene(addingLineToScene, line);
+      broadcast?.({ type: "line-add", sceneId: addingLineToScene, line });
       setNewLineText("");
       setNewLineCharacter("");
       // Keep the form open for rapid entry
@@ -238,10 +244,11 @@ export function ScriptView() {
         const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
         if (scene) {
           updateLine(scene.id, lineId, { text: data.text, character: data.character });
+          broadcast?.({ type: "line-update", sceneId: scene.id, lineId, updates: { text: data.text, character: data.character } });
         }
       } catch {}
     },
-    [projectId, scenes, updateLine]
+    [projectId, scenes, updateLine, broadcast]
   );
 
   const handleDeleteLine = useCallback(
@@ -254,10 +261,13 @@ export function ScriptView() {
         );
         if (!res.ok) return;
         const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
-        if (scene) deleteLine(scene.id, lineId);
+        if (scene) {
+          deleteLine(scene.id, lineId);
+          broadcast?.({ type: "line-delete", sceneId: scene.id, lineId });
+        }
       } catch {}
     },
-    [projectId, scenes, deleteLine]
+    [projectId, scenes, deleteLine, broadcast]
   );
 
   const handleEditSceneTitle = useCallback(
@@ -271,9 +281,10 @@ export function ScriptView() {
         });
         if (!res.ok) return;
         updateSceneTitle(sceneId, title);
+        broadcast?.({ type: "scene-title", sceneId, title });
       } catch {}
     },
-    [projectId, updateSceneTitle]
+    [projectId, updateSceneTitle, broadcast]
   );
 
   const handleDeleteScene = useCallback(
@@ -286,9 +297,10 @@ export function ScriptView() {
         );
         if (!res.ok) return;
         deleteScene(sceneId);
+        broadcast?.({ type: "scene-delete", sceneId });
       } catch {}
     },
-    [projectId, deleteScene]
+    [projectId, deleteScene, broadcast]
   );
 
   // Group scenes for "add line" buttons
