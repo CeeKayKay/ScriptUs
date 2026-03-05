@@ -608,7 +608,7 @@ function EditableCuedText({
   }
 
   return (
-    <span onDoubleClick={() => setIsEditing(true)} style={{ cursor: "text" }}>
+    <span onClick={() => setIsEditing(true)} style={{ cursor: "text" }}>
       <CuedText
         text={text}
         cues={cues}
