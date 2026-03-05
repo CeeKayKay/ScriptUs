@@ -585,6 +585,7 @@ function EditableCuedText({
   onSave: (newText: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const clickPosRef = useRef<{ x: number; y: number } | null>(null);
 
   if (isEditing) {
     return (
@@ -598,6 +599,7 @@ function EditableCuedText({
         lineId={lineId}
         onAddCue={onAddCue}
         autoFocus
+        clickPos={clickPosRef.current}
         onSave={(newText) => {
           onSave(newText);
           setIsEditing(false);
@@ -608,7 +610,13 @@ function EditableCuedText({
   }
 
   return (
-    <span onClick={() => setIsEditing(true)} style={{ cursor: "text" }}>
+    <span
+      onClick={(e) => {
+        clickPosRef.current = { x: e.clientX, y: e.clientY };
+        setIsEditing(true);
+      }}
+      style={{ cursor: "text" }}
+    >
       <CuedText
         text={text}
         cues={cues}
@@ -658,6 +666,7 @@ function EditableText({
   onSave,
   onCancel,
   autoFocus,
+  clickPos,
   activeRole,
   lineId,
   onAddCue,
@@ -671,6 +680,7 @@ function EditableText({
   onSave: (newText: string) => void;
   onCancel?: () => void;
   autoFocus?: boolean;
+  clickPos?: { x: number; y: number } | null;
   activeRole?: ProjectRole;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
@@ -802,12 +812,31 @@ function EditableText({
     document.execCommand("insertText", false, plainText);
   }, []);
 
-  // Auto-focus when switching from CuedText to EditableText
+  // Auto-focus when switching from CuedText to EditableText, placing cursor at click position
   useEffect(() => {
     if (autoFocus && elRef.current) {
       elRef.current.focus();
+
+      if (clickPos) {
+        // Use caretRangeFromPoint to place cursor where the user clicked
+        requestAnimationFrame(() => {
+          try {
+            let range: Range | null = null;
+            if (document.caretRangeFromPoint) {
+              range = document.caretRangeFromPoint(clickPos.x, clickPos.y);
+            }
+            if (range && elRef.current?.contains(range.startContainer)) {
+              const sel = window.getSelection();
+              if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          } catch {}
+        });
+      }
     }
-  }, [autoFocus]);
+  }, [autoFocus, clickPos]);
 
   const cueLabel = activeRole ? getSelectionCueLabel(activeRole) : null;
   const showCueButton = hasSelection && cueLabel && lineId && onAddCue;

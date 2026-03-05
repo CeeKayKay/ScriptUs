@@ -114,10 +114,24 @@ function getPersistedCuePanelSide(): CuePanelSide {
   return "right";
 }
 
+function getPersistedActiveRole(): ProjectRole {
+  if (typeof window === "undefined") return "STAGE_MANAGER";
+  try {
+    const saved = localStorage.getItem("scriptus-active-role");
+    if (saved) return saved as ProjectRole;
+  } catch {}
+  return "STAGE_MANAGER";
+}
+
 export const useStageStore = create<StageStore>((set) => ({
   // Defaults
-  activeRole: "STAGE_MANAGER",
-  setActiveRole: (role) => set({ activeRole: role, activeCueId: null }),
+  activeRole: getPersistedActiveRole(),
+  setActiveRole: (role) => {
+    try {
+      localStorage.setItem("scriptus-active-role", role);
+    } catch {}
+    set({ activeRole: role, activeCueId: null });
+  },
 
   projectId: null,
   projectTitle: "",
