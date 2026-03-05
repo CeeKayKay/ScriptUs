@@ -1,0 +1,133 @@
+// ============================================
+// SCRIPTUS — Type Definitions
+// ============================================
+
+export type ProjectRole =
+  | "STAGE_MANAGER"
+  | "ACTOR"
+  | "LIGHTING"
+  | "SOUND"
+  | "SET_DESIGN"
+  | "PROPS"
+  | "DIRECTOR"
+  | "VIEWER";
+
+export type CueType =
+  | "LIGHT"
+  | "SOUND"
+  | "PROPS"
+  | "SET"
+  | "BLOCKING"
+  | "PROJECTION"
+  | "FLY"
+  | "SPOT";
+
+export type CueStatus = "DRAFT" | "REVIEW" | "APPROVED" | "LOCKED";
+
+export type LineType =
+  | "STAGE_DIRECTION"
+  | "DIALOGUE"
+  | "ACT_HEADER"
+  | "SCENE_HEADER"
+  | "SONG"
+  | "TRANSITION";
+
+// ---- View Models ----
+
+export interface RoleConfig {
+  id: ProjectRole;
+  label: string;
+  icon: string;
+  color: string;
+  visibleCueTypes: CueType[];
+  showAllDialogue: boolean;
+  showStageDirections: boolean;
+  hasCuePanel: boolean;
+}
+
+export interface CueTypeConfig {
+  type: CueType;
+  label: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  associatedRole: ProjectRole;
+}
+
+export interface ScriptLineView {
+  id: string;
+  sceneId: string;
+  type: LineType;
+  character?: string;
+  text: string;
+  sortOrder: number;
+  cues: CueView[];
+}
+
+export interface CueView {
+  id: string;
+  type: CueType;
+  label: string;
+  number: number;
+  note: string;
+  status: CueStatus;
+  lineId: string | null;
+  sceneId: string;
+  duration?: number;
+  preWait?: number;
+  followTime?: number;
+  createdBy: { name: string; id: string };
+  updatedAt: string;
+}
+
+export interface SceneView {
+  id: string;
+  act: number;
+  scene: number;
+  title: string;
+  lines: ScriptLineView[];
+}
+
+export interface ProjectView {
+  id: string;
+  title: string;
+  subtitle?: string;
+  scenes: SceneView[];
+  members: MemberView[];
+}
+
+export interface MemberView {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: ProjectRole;
+  character?: string;
+  image?: string;
+}
+
+// ---- Presence / Collaboration ----
+
+export interface UserPresence {
+  userId: string;
+  name: string;
+  color: string;
+  role: ProjectRole;
+  cursorLineId?: string;
+  lastActive: number;
+}
+
+// ---- Cue Editor ----
+
+export interface CueFormData {
+  type: CueType;
+  label: string;
+  number: number;
+  note: string;
+  status: CueStatus;
+  lineId: string | null;
+  sceneId: string;
+  duration?: number;
+  preWait?: number;
+  followTime?: number;
+}

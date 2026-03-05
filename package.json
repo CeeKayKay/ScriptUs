@@ -1,0 +1,52 @@
+{
+  "name": "scriptus",
+  "version": "1.0.0",
+  "description": "Real-time collaborative theater production script manager",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"next dev\" \"node server/ws-server.js\"",
+    "dev:next": "next dev",
+    "dev:ws": "node server/ws-server.js",
+    "build": "next build",
+    "start": "next start",
+    "start:ws": "node server/ws-server.js",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^1.6.0",
+    "@prisma/client": "^5.14.0",
+    "@tiptap/core": "^2.4.0",
+    "@tiptap/extension-collaboration": "^2.4.0",
+    "@tiptap/extension-collaboration-cursor": "^2.4.0",
+    "@tiptap/extension-highlight": "^2.4.0",
+    "@tiptap/pm": "^2.4.0",
+    "@tiptap/react": "^2.4.0",
+    "@tiptap/starter-kit": "^2.4.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.378.0",
+    "next": "^14.2.3",
+    "next-auth": "^4.24.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "y-prosemirror": "^1.2.9",
+    "y-protocols": "^1.0.6",
+    "y-websocket": "^2.0.3",
+    "yjs": "^13.6.15",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "postcss": "^8.4.38",
+    "prisma": "^5.14.0",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.5"
+  }
+}

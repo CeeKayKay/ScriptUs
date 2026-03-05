@@ -1,0 +1,234 @@
+// ============================================
+// SCRIPTUS — Database Schema
+// ============================================
+// Run `npx prisma db push` or `npx prisma migrate dev` to apply
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Auth (NextAuth) ----
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---- Users ----
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  // ScriptUs relations
+  memberships   ProjectMember[]
+  createdCues   Cue[]           @relation("CueCreatedBy")
+  updatedCues   Cue[]           @relation("CueUpdatedBy")
+  comments      Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- Production Projects ----
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  subtitle    String?
+  description String?  @db.Text
+
+  // Yjs document state (binary blob for persistence)
+  yjsState    Bytes?
+
+  members  ProjectMember[]
+  scenes   Scene[]
+  cues     Cue[]
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- Project Membership & Roles ----
+
+enum ProjectRole {
+  STAGE_MANAGER
+  ACTOR
+  LIGHTING
+  SOUND
+  SET_DESIGN
+  PROPS
+  DIRECTOR
+  VIEWER
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  userId    String
+  projectId String
+  role      ProjectRole
+  character String?     // For actors — which character(s) they play
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+// ---- Script Structure ----
+
+model Scene {
+  id        String @id @default(cuid())
+  projectId String
+  act       Int
+  scene     Int
+  title     String
+  sortOrder Int
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scriptLines ScriptLine[]
+  cues       Cue[]
+
+  @@unique([projectId, act, scene])
+  @@index([projectId, sortOrder])
+}
+
+enum LineType {
+  STAGE_DIRECTION
+  DIALOGUE
+  ACT_HEADER
+  SCENE_HEADER
+  SONG
+  TRANSITION
+}
+
+model ScriptLine {
+  id        String   @id @default(cuid())
+  sceneId   String
+  type      LineType
+  character String?  // null for stage directions
+  text      String   @db.Text
+  sortOrder Int
+
+  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  cues  Cue[]
+
+  @@index([sceneId, sortOrder])
+}
+
+// ---- Cues ----
+
+enum CueType {
+  LIGHT
+  SOUND
+  PROPS
+  SET
+  BLOCKING
+  PROJECTION
+  FLY
+  SPOT
+}
+
+enum CueStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  LOCKED
+}
+
+model Cue {
+  id          String    @id @default(cuid())
+  projectId   String
+  sceneId     String
+  lineId      String?   // Linked script line (null = scene-level cue)
+  type        CueType
+  label       String    // e.g. "LX Q1", "SND Q5"
+  number      Float     // Cue number (float for inserting between: 1, 1.5, 2)
+  note        String    @db.Text
+  status      CueStatus @default(DRAFT)
+
+  // Timing
+  preWait     Float?    // seconds before executing
+  duration    Float?    // seconds to complete
+  followTime  Float?    // auto-follow after this many seconds
+
+  // Metadata
+  createdById String
+  updatedById String?
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scene     Scene      @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  line      ScriptLine? @relation(fields: [lineId], references: [id], onDelete: SetNull)
+  createdBy User       @relation("CueCreatedBy", fields: [createdById], references: [id])
+  updatedBy User?      @relation("CueUpdatedBy", fields: [updatedById], references: [id])
+  comments  Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, type])
+  @@index([sceneId])
+  @@index([lineId])
+}
+
+// ---- Comments / Notes ----
+
+model Comment {
+  id        String  @id @default(cuid())
+  projectId String
+  cueId     String?
+  userId    String
+  text      String  @db.Text
+  resolved  Boolean @default(false)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cue     Cue?    @relation(fields: [cueId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([cueId])
+}
