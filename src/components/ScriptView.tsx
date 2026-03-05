@@ -18,6 +18,7 @@ export function ScriptView() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const visibleLineIdsRef = useRef<Set<string>>(new Set());
   const roleConfig = ROLES[activeRole];
 
   // Flatten all lines across scenes, with scene headers injected
@@ -61,8 +62,7 @@ export function ScriptView() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        setVisibleLineIds((prev) => {
-          const next = new Set(prev);
+        const next = new Set(visibleLineIdsRef.current);
           entries.forEach((entry) => {
             const lineId = entry.target.getAttribute("data-line-id");
             if (lineId) {
@@ -73,8 +73,8 @@ export function ScriptView() {
               }
             }
           });
-          return next;
-        });
+          visibleLineIdsRef.current = next;
+          setVisibleLineIds(next);
       },
       { root: container, threshold: 0.1 }
     );
