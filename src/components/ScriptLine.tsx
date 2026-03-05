@@ -276,7 +276,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             fontFamily: "Playfair Display, serif",
             fontSize: Math.round(scriptTextSize * 0.9),
             fontWeight: 600,
-            color: "#c8c0b0",
+            color: "#FFFFFF",
             letterSpacing: "0.08em",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
             marginBottom: 12,
@@ -354,8 +354,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   tag="span"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 0.7),
-                    color: "#8a8070",
+                    fontSize: scriptTextSize,
+                    color: "#FFFFFF",
                     fontStyle: "italic",
                     lineHeight: 1.7,
                     whiteSpace: "pre-wrap",
@@ -382,8 +382,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   tag="span"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 0.7),
-                    color: "#8a8070",
+                    fontSize: scriptTextSize,
+                    color: "#FFFFFF",
                     fontStyle: "italic",
                     lineHeight: 1.7,
                     whiteSpace: "pre-wrap",
