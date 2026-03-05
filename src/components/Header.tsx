@@ -9,16 +9,17 @@ interface HeaderProps {
 }
 
 export function Header({ connected, synced }: HeaderProps) {
-  const { projectTitle, onlineUsers } = useStageStore();
+  const { projectTitle, onlineUsers, openSettings } = useStageStore();
 
   return (
     <div
-      className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+      className="relative flex items-center justify-between px-5 py-3 flex-shrink-0"
       style={{
         background: "#1a1916",
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}
     >
+      {/* Left: Logo + connection */}
       <div className="flex items-center gap-3">
         <Link
           href="/"
@@ -31,20 +32,6 @@ export function Header({ connected, synced }: HeaderProps) {
         >
           ◆ SCRIPTUS
         </Link>
-
-        <span
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 11,
-            color: "#666",
-            padding: "3px 8px",
-            background: "rgba(255,255,255,0.03)",
-            borderRadius: 4,
-            letterSpacing: "0.03em",
-          }}
-        >
-          {projectTitle || "Untitled"}
-        </span>
 
         {/* Connection indicator */}
         <div
@@ -65,8 +52,40 @@ export function Header({ connected, synced }: HeaderProps) {
         </div>
       </div>
 
-      {/* Online collaborators */}
-      <div className="flex items-center gap-2">
+      {/* Center: Show title */}
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      >
+        <span
+          style={{
+            fontFamily: "Playfair Display, serif",
+            fontSize: 22,
+            fontWeight: 600,
+            color: "#c8c0b0",
+            letterSpacing: "0.06em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {projectTitle || "Untitled"}
+        </span>
+      </div>
+
+      {/* Right: Settings + Online collaborators */}
+      <div className="flex items-center gap-3">
+        {/* Settings gear */}
+        <button
+          onClick={openSettings}
+          className="w-10 h-10 rounded-md flex items-center justify-center hover:bg-white/5 transition-colors"
+          style={{
+            color: "#888",
+            fontSize: 24,
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+          title="Settings"
+        >
+          ⚙
+        </button>
+
         <span
           style={{
             fontFamily: "DM Mono, monospace",

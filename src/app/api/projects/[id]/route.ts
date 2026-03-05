@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // GET /api/projects/[id] — Full project data for the editor
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -14,7 +14,7 @@ export async function GET(
   }
 
   const userId = (session.user as any).id;
-  const projectId = params.id;
+  const { id: projectId } = await params;
 
   // Verify membership
   const membership = await prisma.projectMember.findUnique({
@@ -51,6 +51,12 @@ export async function GET(
           },
         },
       },
+      customRoles: {
+        orderBy: { createdAt: "asc" },
+      },
+      customCueTypes: {
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
@@ -73,6 +79,22 @@ export async function GET(
       character: m.character,
       image: m.user.image,
     })),
+    customRoles: project.customRoles.map((r) => ({
+      id: r.id,
+      name: r.name,
+      icon: r.icon,
+      color: r.color,
+      visibleCueTypes: r.visibleCueTypes,
+    })),
+    customCueTypes: project.customCueTypes.map((ct) => ({
+      id: ct.id,
+      type: ct.type,
+      label: ct.label,
+      color: ct.color,
+      bgColor: ct.bgColor,
+      borderColor: ct.borderColor,
+      associatedRole: ct.associatedRole,
+    })),
     scenes: project.scenes.map((scene) => ({
       id: scene.id,
       act: scene.act,
@@ -91,6 +113,7 @@ export async function GET(
           label: cue.label,
           number: cue.number,
           note: cue.note,
+          scriptRef: cue.scriptRef,
           status: cue.status,
           lineId: cue.lineId,
           sceneId: cue.sceneId,

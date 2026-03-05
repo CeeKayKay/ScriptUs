@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useSession } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { useYjs } from "@/hooks/useYjs";
@@ -9,14 +9,16 @@ import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { ScriptView } from "@/components/ScriptView";
 import { CueSidePanel } from "@/components/CueSidePanel";
 import { CueEditor } from "@/components/CueEditor";
+import { Settings } from "@/components/Settings";
 import { ROLES } from "@/lib/roles";
 import type { ProjectRole } from "@/types";
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default function ProjectPage({ params }: PageProps) {
+export default function ProjectPage({ params: paramsPromise }: PageProps) {
+  const params = use(paramsPromise);
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,8 @@ export default function ProjectPage({ params }: PageProps) {
     setProject,
     isCuePanelOpen,
     isCueEditorOpen,
+    isSettingsOpen,
+    cuePanelSide,
     setOnlineUsers,
   } = useStageStore();
 
@@ -63,6 +67,8 @@ export default function ProjectPage({ params }: PageProps) {
           title: data.title,
           scenes: data.scenes,
           members: data.members,
+          customRoles: data.customRoles || [],
+          customCueTypes: data.customCueTypes || [],
         });
         setMyRole(data.myRole);
         setLoading(false);
@@ -125,15 +131,21 @@ export default function ProjectPage({ params }: PageProps) {
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
+        {/* Cue side panel on left */}
+        {showSidePanel && cuePanelSide === "left" && <CueSidePanel />}
+
         {/* Script panel */}
         <ScriptView />
 
-        {/* Cue side panel (for operator roles) */}
-        {showSidePanel && <CueSidePanel />}
+        {/* Cue side panel on right */}
+        {showSidePanel && cuePanelSide === "right" && <CueSidePanel />}
       </div>
 
       {/* Cue editor modal */}
       {isCueEditorOpen && <CueEditor projectId={params.id} />}
+
+      {/* Settings modal */}
+      {isSettingsOpen && <Settings projectId={params.id} myRole={myRole} />}
 
       {/* Footer status bar */}
       <div

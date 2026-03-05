@@ -10,6 +10,7 @@ export type ProjectRole =
   | "SET_DESIGN"
   | "PROPS"
   | "DIRECTOR"
+  | "WRITER"
   | "VIEWER";
 
 export type CueType =
@@ -70,6 +71,7 @@ export interface CueView {
   label: string;
   number: number;
   note: string;
+  scriptRef?: string;
   status: CueStatus;
   lineId: string | null;
   sceneId: string;
@@ -94,6 +96,8 @@ export interface ProjectView {
   subtitle?: string;
   scenes: SceneView[];
   members: MemberView[];
+  customRoles?: CustomRoleView[];
+  customCueTypes?: CustomCueTypeView[];
 }
 
 export interface MemberView {
@@ -115,6 +119,26 @@ export interface UserPresence {
   role: ProjectRole;
   cursorLineId?: string;
   lastActive: number;
+}
+
+// ---- Custom Roles & Cue Types ----
+
+export interface CustomRoleView {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  visibleCueTypes: string[];
+}
+
+export interface CustomCueTypeView {
+  id: string;
+  type: string;
+  label: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  associatedRole: string;
 }
 
 // ---- Cue Editor ----

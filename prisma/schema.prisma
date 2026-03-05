@@ -81,10 +81,12 @@ model Project {
   // Yjs document state (binary blob for persistence)
   yjsState    Bytes?
 
-  members  ProjectMember[]
-  scenes   Scene[]
-  cues     Cue[]
-  comments Comment[]
+  members        ProjectMember[]
+  scenes         Scene[]
+  cues           Cue[]
+  comments       Comment[]
+  customRoles    CustomRole[]
+  customCueTypes CustomCueType[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -100,6 +102,7 @@ enum ProjectRole {
   SET_DESIGN
   PROPS
   DIRECTOR
+  WRITER
   VIEWER
 }
 
@@ -186,6 +189,7 @@ model Cue {
   label       String    // e.g. "LX Q1", "SND Q5"
   number      Float     // Cue number (float for inserting between: 1, 1.5, 2)
   note        String    @db.Text
+  scriptRef   String?   @db.Text  // The highlighted script text when the cue was created
   status      CueStatus @default(DRAFT)
 
   // Timing
@@ -210,6 +214,44 @@ model Cue {
   @@index([projectId, type])
   @@index([sceneId])
   @@index([lineId])
+}
+
+// ---- Custom Roles & Cue Types (Project-level) ----
+
+model CustomRole {
+  id              String   @id @default(cuid())
+  projectId       String
+  name            String
+  icon            String   @default("●")
+  color           String   @default("#888888")
+  visibleCueTypes String[] // Array of CueType strings
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model CustomCueType {
+  id             String @id @default(cuid())
+  projectId      String
+  type           String // Custom type key (e.g. "CUSTOM_SFX")
+  label          String // Short label (e.g. "SFX")
+  color          String @default("#888888")
+  bgColor        String @default("rgba(136, 136, 136, 0.08)")
+  borderColor    String @default("rgba(136, 136, 136, 0.25)")
+  associatedRole String // ProjectRole string or custom role name
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, type])
+  @@index([projectId])
 }
 
 // ---- Comments / Notes ----

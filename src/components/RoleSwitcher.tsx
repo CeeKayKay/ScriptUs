@@ -27,7 +27,7 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
           className="mr-2 flex-shrink-0"
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 9,
+            fontSize: 18,
             color: "#555",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -42,10 +42,10 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
             <button
               key={role.id}
               onClick={() => setActiveRole(role.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all whitespace-nowrap flex-shrink-0"
+              className="flex items-center gap-2 px-4 py-2 rounded-md transition-all whitespace-nowrap flex-shrink-0"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 11,
+                fontSize: 22,
                 fontWeight: isActive ? 700 : 400,
                 color: isActive ? role.color : "#777",
                 background: isActive ? role.color + "12" : "transparent",
@@ -54,7 +54,7 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
                   : "1px solid transparent",
               }}
             >
-              <span style={{ fontSize: 13 }}>{role.icon}</span>
+              <span style={{ fontSize: 26 }}>{role.icon}</span>
               {role.label}
               {role.id === myRole && (
                 <span
@@ -83,7 +83,7 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
         <span
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 9,
+            fontSize: 18,
             color: "#444",
             letterSpacing: "0.08em",
           }}
@@ -97,15 +97,15 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
           return (
             <span
               key={type}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1.5"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 10,
+                fontSize: 20,
                 color: config.color,
               }}
             >
               <span
-                className="inline-block w-2 h-2 rounded-sm"
+                className="inline-block w-3.5 h-3.5 rounded-sm"
                 style={{
                   background: config.color + "40",
                   border: `1px solid ${config.color}`,
@@ -120,7 +120,7 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
           <span
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: 10,
+              fontSize: 20,
               color: "#444",
             }}
           >

@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   const rolePermissions: Record<string, string[]> = {
     STAGE_MANAGER: ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION", "FLY", "SPOT"],
     DIRECTOR: ["BLOCKING"],
+    ACTOR: ["BLOCKING"],
     LIGHTING: ["LIGHT", "PROJECTION", "SPOT"],
     SOUND: ["SOUND"],
     SET_DESIGN: ["SET", "FLY"],
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       label: body.label,
       number: body.number,
       note: body.note || "",
+      scriptRef: body.scriptRef || null,
       status: "DRAFT",
       duration: body.duration || null,
       preWait: body.preWait || null,

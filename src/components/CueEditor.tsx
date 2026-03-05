@@ -10,12 +10,41 @@ interface CueEditorProps {
 }
 
 export function CueEditor({ projectId }: CueEditorProps) {
-  const { editingCue, closeCueEditor, scenes, activeRole } = useStageStore();
+  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore } = useStageStore();
   const isEditing = !!editingCue;
 
-  const [type, setType] = useState<CueType>(editingCue?.type || "LIGHT");
+  // Auto-select cue type based on active role
+  const defaultType = (): CueType => {
+    if (editingCue) return editingCue.type;
+    const roleToType: Partial<Record<string, CueType>> = {
+      LIGHTING: "LIGHT",
+      SOUND: "SOUND",
+      PROPS: "PROPS",
+      SET_DESIGN: "SET",
+      ACTOR: "BLOCKING",
+      DIRECTOR: "BLOCKING",
+      STAGE_MANAGER: "LIGHT",
+    };
+    return roleToType[activeRole] || "LIGHT";
+  };
+
+  // Auto-calculate next cue number for a given type
+  const getNextNumber = (cueType: CueType): number => {
+    let maxNum = 0;
+    scenes.forEach((sc) =>
+      sc.lines.forEach((l) =>
+        l.cues.forEach((c) => {
+          if (c.type === cueType && c.number > maxNum) maxNum = c.number;
+        })
+      )
+    );
+    return Math.floor(maxNum) + 1;
+  };
+
+  const initialType = defaultType();
+  const [type, setType] = useState<CueType>(initialType);
   const [label, setLabel] = useState(editingCue?.label || "");
-  const [number, setNumber] = useState(editingCue?.number || 1);
+  const [number, setNumber] = useState(editingCue?.number || getNextNumber(initialType));
   const [note, setNote] = useState(editingCue?.note || "");
   const [status, setStatus] = useState<CueStatus>(editingCue?.status || "DRAFT");
   const [duration, setDuration] = useState(editingCue?.duration || 0);
@@ -36,7 +65,9 @@ export function CueEditor({ projectId }: CueEditorProps) {
     setError(null);
 
     try {
-      const sceneId = scenes[0]?.id; // Default to first scene
+      const sceneId = editingCue?.sceneId || newCueSceneId || scenes[0]?.id;
+      const lineId = editingCue?.lineId || newCueLineId || null;
+
       if (!sceneId) {
         setError("No scenes available");
         setSaving(false);
@@ -46,8 +77,8 @@ export function CueEditor({ projectId }: CueEditorProps) {
       const body = {
         ...(isEditing && { id: editingCue.id }),
         projectId,
-        sceneId: editingCue?.sceneId || sceneId,
-        lineId: editingCue?.lineId || null,
+        sceneId,
+        lineId,
         type,
         label,
         number,
@@ -55,6 +86,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
         status,
         duration: duration || null,
         preWait: preWait || null,
+        ...(!isEditing && newCueSelectedText && { scriptRef: newCueSelectedText }),
       };
 
       const res = await fetch("/api/cues", {
@@ -68,9 +100,42 @@ export function CueEditor({ projectId }: CueEditorProps) {
         throw new Error(data.error || "Failed to save cue");
       }
 
+      const data = await res.json();
+      const savedCue = data.cue;
+
+      // Update the store with the new/updated cue
+      if (isEditing) {
+        updateCueInStore(savedCue.id, {
+          type: savedCue.type,
+          label: savedCue.label,
+          number: savedCue.number,
+          note: savedCue.note,
+          status: savedCue.status,
+          duration: savedCue.duration,
+          preWait: savedCue.preWait,
+          followTime: savedCue.followTime,
+          updatedAt: savedCue.updatedAt || new Date().toISOString(),
+        });
+      } else if (lineId && sceneId) {
+        addCueToLine(sceneId, lineId, {
+          id: savedCue.id,
+          type: savedCue.type,
+          label: savedCue.label,
+          number: savedCue.number,
+          note: savedCue.note,
+          status: savedCue.status,
+          lineId: savedCue.lineId,
+          sceneId: savedCue.sceneId,
+          scriptRef: savedCue.scriptRef,
+          duration: savedCue.duration,
+          preWait: savedCue.preWait,
+          followTime: savedCue.followTime,
+          createdBy: savedCue.createdBy,
+          updatedAt: savedCue.updatedAt || new Date().toISOString(),
+        });
+      }
+
       closeCueEditor();
-      // In a real app, we'd update the store or refetch
-      window.location.reload();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -79,7 +144,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
   };
 
   const handleDelete = async () => {
-    if (!editingCue || !confirm("Delete this cue?")) return;
+    if (!editingCue || !confirm("Are you sure you want to delete this cue?")) return;
 
     try {
       const res = await fetch(`/api/cues?id=${editingCue.id}`, {
@@ -91,8 +156,31 @@ export function CueEditor({ projectId }: CueEditorProps) {
         throw new Error(data.error || "Failed to delete");
       }
 
+      // Remove from store
+      if (editingCue.lineId && editingCue.sceneId) {
+        removeCueFromLine(editingCue.sceneId, editingCue.lineId, editingCue.id);
+      }
+
+      // Renumber remaining cues of same type
+      const remaining: string[] = [];
+      scenes.forEach((sc) =>
+        sc.lines.forEach((l) =>
+          l.cues
+            .filter((c) => c.type === editingCue.type && c.id !== editingCue.id)
+            .sort((a, b) => a.number - b.number)
+            .forEach((c) => remaining.push(c.id))
+        )
+      );
+      if (remaining.length > 0) {
+        reorderCuesInStore(editingCue.type, remaining);
+        fetch("/api/cues/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cues: remaining.map((id, idx) => ({ id, number: idx + 1 })) }),
+        });
+      }
+
       closeCueEditor();
-      window.location.reload();
     } catch (e: any) {
       setError(e.message);
     }
@@ -104,7 +192,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
       style={{ background: "rgba(0,0,0,0.7)" }}
     >
       <div
-        className="w-full max-w-lg rounded-xl animate-fade-in"
+        className="w-full max-w-2xl rounded-xl animate-fade-in"
         style={{
           background: "#1a1916",
           border: "1px solid #2a2720",
@@ -119,7 +207,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
           <h2
             style={{
               fontFamily: "Playfair Display, serif",
-              fontSize: 18,
+              fontSize: 36,
               fontWeight: 600,
             }}
           >
@@ -127,8 +215,8 @@ export function CueEditor({ projectId }: CueEditorProps) {
           </h2>
           <button
             onClick={closeCueEditor}
-            className="text-sm px-2 py-1 rounded hover:bg-white/5"
-            style={{ fontFamily: "DM Mono, monospace", color: "#888" }}
+            className="px-3 py-2 rounded hover:bg-white/5"
+            style={{ fontFamily: "DM Mono, monospace", fontSize: 24, color: "#888" }}
           >
             ✕
           </button>
@@ -144,10 +232,43 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 border: "1px solid rgba(232, 120, 71, 0.3)",
                 color: "#E87847",
                 fontFamily: "DM Mono, monospace",
-                fontSize: 12,
+                fontSize: 24,
               }}
             >
               {error}
+            </div>
+          )}
+
+          {/* Script reference */}
+          {(newCueSelectedText || editingCue?.scriptRef) && (
+            <div>
+              <label
+                className="block mb-1.5"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 20,
+                  color: "#888",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Script Reference
+              </label>
+              <div
+                className="px-3 py-2.5 rounded"
+                style={{
+                  fontFamily: "Libre Baskerville, serif",
+                  fontSize: 28,
+                  lineHeight: 1.6,
+                  color: "#e0ddd5",
+                  background: "rgba(232, 197, 71, 0.04)",
+                  border: "1px solid rgba(232, 197, 71, 0.15)",
+                  borderLeft: "3px solid #E8C54780",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {newCueSelectedText || editingCue?.scriptRef}
+              </div>
             </div>
           )}
 
@@ -157,7 +278,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
               className="block mb-1.5"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 10,
+                fontSize: 20,
                 color: "#888",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
@@ -169,11 +290,17 @@ export function CueEditor({ projectId }: CueEditorProps) {
               {CUE_TYPE_LIST.map((ct) => (
                 <button
                   key={ct.type}
-                  onClick={() => setType(ct.type)}
+                  onClick={() => {
+                    setType(ct.type);
+                    if (!isEditing) {
+                      const nextNum = getNextNumber(ct.type);
+                      setNumber(nextNum);
+                    }
+                  }}
                   className="px-3 py-1.5 rounded transition-all"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
+                    fontSize: 22,
                     fontWeight: type === ct.type ? 700 : 400,
                     color: type === ct.type ? ct.color : "#666",
                     background:
@@ -211,7 +338,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 className="w-full px-3 py-2 rounded"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 13,
+                  fontSize: 26,
                   background: "#13120f",
                   border: "1px solid #2a2720",
                   color: "#e0ddd5",
@@ -241,7 +368,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 className="w-full px-3 py-2 rounded"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 13,
+                  fontSize: 26,
                   background: "#13120f",
                   border: "1px solid #2a2720",
                   color: "#e0ddd5",
@@ -257,23 +384,23 @@ export function CueEditor({ projectId }: CueEditorProps) {
               className="block mb-1.5"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 10,
+                fontSize: 20,
                 color: "#888",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
             >
-              Cue Note
+              {type === "SET" ? "Notes" : type === "PROPS" ? "Notes" : "Cue Note"}
             </label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              placeholder="Describe the cue execution..."
+              placeholder={type === "SET" ? "Set design notes" : type === "PROPS" ? "Prop notes" : "Describe the cue execution..."}
               className="w-full px-3 py-2 rounded resize-none"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 12,
+                fontSize: 24,
                 lineHeight: 1.6,
                 background: "#13120f",
                 border: "1px solid #2a2720",
@@ -307,7 +434,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 className="w-full px-3 py-2 rounded"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 13,
+                  fontSize: 26,
                   background: "#13120f",
                   border: "1px solid #2a2720",
                   color: "#e0ddd5",
@@ -337,7 +464,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 className="w-full px-3 py-2 rounded"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 13,
+                  fontSize: 26,
                   background: "#13120f",
                   border: "1px solid #2a2720",
                   color: "#e0ddd5",
@@ -353,7 +480,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
               className="block mb-1.5"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 10,
+                fontSize: 20,
                 color: "#888",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
@@ -377,7 +504,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                       className="px-3 py-1.5 rounded transition-all"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 10,
+                        fontSize: 20,
                         fontWeight: status === s ? 700 : 400,
                         color: status === s ? colors[s] : "#666",
                         background:
@@ -408,7 +535,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
                 className="px-3 py-1.5 rounded transition-colors hover:bg-red-500/10"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 11,
+                  fontSize: 22,
                   color: "#E87847",
                   border: "1px solid rgba(232, 120, 71, 0.3)",
                 }}
@@ -423,7 +550,7 @@ export function CueEditor({ projectId }: CueEditorProps) {
               className="px-4 py-2 rounded transition-colors hover:bg-white/5"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 12,
+                fontSize: 24,
                 color: "#888",
                 border: "1px solid #333",
               }}
@@ -432,16 +559,16 @@ export function CueEditor({ projectId }: CueEditorProps) {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || !label || !note}
+              disabled={saving || !label}
               className="px-4 py-2 rounded transition-colors"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 12,
+                fontSize: 24,
                 fontWeight: 600,
                 color: "#E8C547",
                 background: "#E8C54715",
                 border: "1px solid #E8C54740",
-                opacity: saving || !label || !note ? 0.5 : 1,
+                opacity: saving || !label ? 0.5 : 1,
               }}
             >
               {saving ? "Saving..." : isEditing ? "Update Cue" : "Create Cue"}

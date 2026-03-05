@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession, signIn } from "next-auth/react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -146,19 +146,34 @@ export default function HomePage() {
             Welcome back, {session?.user?.name || "Director"}
           </p>
         </div>
-        <Link
-          href="/project/new"
-          className="px-5 py-2.5 rounded-lg transition-colors"
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 12,
-            background: "#E8C54715",
-            border: "1px solid #E8C54740",
-            color: "#E8C547",
-          }}
-        >
-          + New Production
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => signOut()}
+            className="px-4 py-2.5 rounded-lg transition-colors"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 12,
+              background: "#1a1916",
+              border: "1px solid #2a2720",
+              color: "#888",
+            }}
+          >
+            Sign Out
+          </button>
+          <Link
+            href="/project/new"
+            className="px-5 py-2.5 rounded-lg transition-colors"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 12,
+              background: "#E8C54715",
+              border: "1px solid #E8C54740",
+              color: "#E8C547",
+            }}
+          >
+            + New Production
+          </Link>
+        </div>
       </div>
 
       {/* Project list */}
