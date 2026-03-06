@@ -40,6 +40,29 @@ export default function HomePage() {
   const [loginName, setLoginName] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
 
+  // --- Delete account ---
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("Are you sure you want to delete your account? This will remove you from all productions and cannot be undone.")) return;
+    if (!confirm("This is permanent. Type OK in the next prompt to confirm.")) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/account", { method: "DELETE" });
+      if (res.ok) {
+        signOut({ callbackUrl: "/" });
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete account");
+        setDeleting(false);
+      }
+    } catch {
+      alert("Failed to delete account");
+      setDeleting(false);
+    }
+  };
+
   // Not logged in — show landing
   if (status === "unauthenticated") {
     return (
@@ -238,6 +261,20 @@ export default function HomePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deleting}
+            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors hover:bg-red-500/10"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 12,
+              border: "1px solid rgba(232, 71, 71, 0.3)",
+              color: "#E84747",
+              opacity: deleting ? 0.5 : 1,
+            }}
+          >
+            {deleting ? "Deleting..." : "Delete Account"}
+          </button>
           <button
             onClick={() => signOut()}
             className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors"
