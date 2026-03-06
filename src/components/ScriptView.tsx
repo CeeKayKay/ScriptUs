@@ -59,6 +59,19 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
   // Can user write content?
   const canWrite = ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(activeRole);
 
+  // Bank of character names from existing lines
+  const characterBank = useMemo(() => {
+    const names = new Set<string>();
+    scenes.forEach((scene) =>
+      scene.lines.forEach((line) => {
+        if (line.character && line.character.trim()) {
+          names.add(line.character.trim().toUpperCase());
+        }
+      })
+    );
+    return Array.from(names).sort();
+  }, [scenes]);
+
   // Flatten all lines across scenes, with scene headers injected
   const allLines = useMemo(() => {
     const lines: (ScriptLineView & { _sceneId?: string })[] = [];
@@ -421,22 +434,11 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                         </select>
 
                         {(newLineType === "DIALOGUE" || newLineType === "SONG") && (
-                          <input
-                            type="text"
+                          <CharacterPicker
                             value={newLineCharacter}
-                            onChange={(e) => setNewLineCharacter(e.target.value.toUpperCase())}
-                            placeholder="CHARACTER"
-                            className="px-2 py-1.5 rounded"
-                            style={{
-                              fontFamily: "DM Mono, monospace",
-                              fontSize: isMobile ? 14 : 22,
-                              width: isMobile ? 120 : 200,
-                              background: "#13120f",
-                              border: "1px solid #2a2720",
-                              color: "#E8C547",
-                              fontWeight: 700,
-                              outline: "none",
-                            }}
+                            onChange={setNewLineCharacter}
+                            characters={characterBank}
+                            isMobile={isMobile}
                           />
                         )}
                       </div>
@@ -737,6 +739,182 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---- Character name picker with bank ----
+
+function CharacterPicker({
+  value,
+  onChange,
+  characters,
+  isMobile,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  characters: string[];
+  isMobile: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = filter
+    ? characters.filter((c) => c.includes(filter.toUpperCase()))
+    : characters;
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isOpen]);
+
+  const selectCharacter = (name: string) => {
+    onChange(name);
+    setFilter("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={isOpen ? filter : value}
+          onChange={(e) => {
+            const v = e.target.value.toUpperCase();
+            if (isOpen) {
+              setFilter(v);
+            } else {
+              onChange(v);
+            }
+          }}
+          onFocus={() => {
+            if (characters.length > 0) {
+              setIsOpen(true);
+              setFilter(value);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && isOpen) {
+              e.preventDefault();
+              if (filter.trim()) {
+                selectCharacter(filter.trim().toUpperCase());
+              } else if (filtered.length > 0) {
+                selectCharacter(filtered[0]);
+              }
+            }
+            if (e.key === "Escape") {
+              setIsOpen(false);
+              setFilter("");
+            }
+          }}
+          placeholder={characters.length > 0 ? "Select or type..." : "CHARACTER"}
+          className="px-2 py-1.5 rounded"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: isMobile ? 14 : 22,
+            width: isMobile ? 140 : 200,
+            background: "#13120f",
+            border: "1px solid #2a2720",
+            color: "#E8C547",
+            fontWeight: 700,
+            outline: "none",
+          }}
+        />
+        {characters.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(!isOpen);
+              if (!isOpen) {
+                setFilter("");
+                inputRef.current?.focus();
+              }
+            }}
+            className="px-1.5 py-1.5 rounded hover:bg-white/5 transition-colors"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: isMobile ? 12 : 18,
+              color: "#666",
+              border: "1px solid #2a2720",
+              background: "#13120f",
+              lineHeight: 1,
+            }}
+          >
+            ▾
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div
+          className="absolute z-20 mt-1 w-full rounded-lg overflow-hidden"
+          style={{
+            background: "#1a1916",
+            border: "1px solid #2a2720",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            maxHeight: 200,
+            overflowY: "auto",
+            minWidth: isMobile ? 140 : 200,
+          }}
+        >
+          {filtered.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => selectCharacter(name)}
+              className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
+              style={{
+                fontFamily: "DM Mono, monospace",
+                fontSize: isMobile ? 13 : 18,
+                fontWeight: 700,
+                color: name === value ? "#E8C547" : "#c8c0b0",
+                background: name === value ? "#E8C54710" : "transparent",
+              }}
+            >
+              {name}
+            </button>
+          ))}
+          {filter && !characters.includes(filter.toUpperCase()) && (
+            <button
+              type="button"
+              onClick={() => selectCharacter(filter.trim().toUpperCase())}
+              className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
+              style={{
+                fontFamily: "DM Mono, monospace",
+                fontSize: isMobile ? 13 : 18,
+                color: "#47E86A",
+                borderTop: filtered.length > 0 ? "1px solid #2a2720" : "none",
+              }}
+            >
+              + Add &ldquo;{filter.toUpperCase()}&rdquo;
+            </button>
+          )}
+          {!filter && filtered.length === 0 && (
+            <div
+              className="px-3 py-2"
+              style={{
+                fontFamily: "DM Mono, monospace",
+                fontSize: isMobile ? 12 : 16,
+                color: "#555",
+              }}
+            >
+              Type a character name
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
