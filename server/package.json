@@ -1,0 +1,13 @@
+{
+  "name": "scriptus-ws-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ws-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "y-websocket": "^2.0.4",
+    "yjs": "^13.6.20"
+  }
+}

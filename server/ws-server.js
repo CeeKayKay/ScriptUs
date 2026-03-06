@@ -9,7 +9,7 @@ const WebSocket = require("ws");
 const WebSocketServer = WebSocket.Server;
 const { setupWSConnection } = require("y-websocket/bin/utils");
 
-const PORT = process.env.WS_PORT || 1234;
+const PORT = process.env.PORT || process.env.WS_PORT || 1234;
 const HOST = process.env.WS_HOST || "0.0.0.0";
 
 const server = http.createServer((req, res) => {
