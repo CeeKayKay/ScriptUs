@@ -29,32 +29,30 @@ export function CueSidePanel() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Collect all cues relevant to this role, ordered by script position
+  // Collect all cues relevant to this role, ordered by cue number within each type
   const cues = useMemo(() => {
     const result: (CueView & { sceneName: string })[] = [];
 
     scenes.forEach((scene) => {
       scene.lines.forEach((line) => {
-        // For lines with multiple cues, sort by where the scriptRef appears in the line text
-        const lineCues = line.cues
+        line.cues
           .filter((c) => roleConfig.visibleCueTypes.includes(c.type))
-          .sort((a, b) => {
-            const posA = a.scriptRef ? line.text.indexOf(a.scriptRef) : -1;
-            const posB = b.scriptRef ? line.text.indexOf(b.scriptRef) : -1;
-            // Cues with scriptRef come first, ordered by position in text
-            if (posA >= 0 && posB >= 0) return posA - posB;
-            if (posA >= 0) return -1;
-            if (posB >= 0) return 1;
-            return a.number - b.number;
+          .forEach((cue) => {
+            result.push({
+              ...cue,
+              sceneName: `Act ${scene.act}, Sc ${scene.scene}`,
+            });
           });
-
-        lineCues.forEach((cue) => {
-          result.push({
-            ...cue,
-            sceneName: `Act ${scene.act}, Sc ${scene.scene}`,
-          });
-        });
       });
+    });
+
+    // Sort by type first (preserve visibleCueTypes order), then by cue number within each type
+    const typeOrder = roleConfig.visibleCueTypes;
+    result.sort((a, b) => {
+      const typeA = typeOrder.indexOf(a.type);
+      const typeB = typeOrder.indexOf(b.type);
+      if (typeA !== typeB) return typeA - typeB;
+      return a.number - b.number;
     });
 
     return result;
@@ -84,7 +82,16 @@ export function CueSidePanel() {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     if (cueId !== draggedId) {
-      setDragOverId(cueId);
+      // Only show drop indicator on cues of the same type (or the end zone)
+      if (cueId === "@@end") {
+        setDragOverId(cueId);
+      } else {
+        const draggedCue = cues.find((c) => c.id === draggedId);
+        const targetCue = cues.find((c) => c.id === cueId);
+        if (draggedCue && targetCue && draggedCue.type === targetCue.type) {
+          setDragOverId(cueId);
+        }
+      }
     }
   };
 
@@ -101,10 +108,21 @@ export function CueSidePanel() {
       return;
     }
 
-    // Reorder: move dragged cue to the position of the target
-    const currentOrder = cues.map((c) => c.id);
+    const draggedCue = cues.find((c) => c.id === draggedId);
+    if (!draggedCue) {
+      setDraggedId(null);
+      return;
+    }
+
+    // Filter to only cues of the same type for reordering
+    const sameTypeCues = cues.filter((c) => c.type === draggedCue.type);
+    const currentOrder = sameTypeCues.map((c) => c.id);
     const dragIdx = currentOrder.indexOf(draggedId);
-    const dropIdx = currentOrder.indexOf(targetId);
+
+    // targetId "@@end" means drop at the very end
+    const dropIdx = targetId === "@@end"
+      ? currentOrder.length - 1
+      : currentOrder.indexOf(targetId);
 
     if (dragIdx === -1 || dropIdx === -1) {
       setDraggedId(null);
@@ -114,25 +132,22 @@ export function CueSidePanel() {
     // Remove dragged from list and insert at drop position
     const newOrder = [...currentOrder];
     newOrder.splice(dragIdx, 1);
-    newOrder.splice(dropIdx, 0, draggedId);
+    const insertIdx = targetId === "@@end" ? newOrder.length : dropIdx;
+    newOrder.splice(insertIdx, 0, draggedId);
 
-    // Determine the cue type (all cues in this panel share role-visible types)
-    const draggedCue = cues.find((c) => c.id === draggedId);
-    if (draggedCue) {
-      // Update store immediately
-      reorderCuesInStore(draggedCue.type, newOrder);
+    // Update store immediately
+    reorderCuesInStore(draggedCue.type, newOrder);
 
-      // Persist to API
-      try {
-        const updates = newOrder.map((id, idx) => ({ id, number: idx + 1 }));
-        await fetch("/api/cues/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cues: updates }),
-        });
-      } catch (err) {
-        console.error("Failed to persist cue reorder", err);
-      }
+    // Persist to API
+    try {
+      const updates = newOrder.map((id, idx) => ({ id, number: idx + 1 }));
+      await fetch("/api/cues/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cues: updates }),
+      });
+    } catch (err) {
+      console.error("Failed to persist cue reorder", err);
     }
 
     setDraggedId(null);
@@ -527,6 +542,20 @@ export function CueSidePanel() {
             </div>
           );
         })}
+
+        {/* Drop zone for dragging to the bottom of the list */}
+        {draggedId && (
+          <div
+            onDragOver={(e) => handleDragOver(e, "@@end")}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, "@@end")}
+            style={{
+              minHeight: 48,
+              borderTop: dragOverId === "@@end" ? `2px solid ${ROLES[activeRole].color}` : "2px solid transparent",
+              transition: "border-color 0.15s ease",
+            }}
+          />
+        )}
 
         {cues.length === 0 && (
           <div className="text-center py-12 px-4">

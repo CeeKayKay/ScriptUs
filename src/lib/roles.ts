@@ -29,7 +29,7 @@ export const ROLES: Record<ProjectRole, RoleConfig> = {
     visibleCueTypes: ["BLOCKING"],
     showAllDialogue: true,
     showStageDirections: true,
-    hasCuePanel: false,
+    hasCuePanel: true,
   },
   LIGHTING: {
     id: "LIGHTING",
