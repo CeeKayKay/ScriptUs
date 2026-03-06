@@ -56,6 +56,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
   } = useStageStore();
 
   const isAdmin = myRoles.some((r) => ADMIN_ROLES.includes(r));
+  const isSM = myRoles.includes("STAGE_MANAGER");
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<SettingsTab>("preferences");
 
@@ -300,7 +301,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
 
   // Load SMTP settings when email tab is opened
   useEffect(() => {
-    if (activeTab !== "email" || !isAdmin || smtpLoaded) return;
+    if (activeTab !== "email" || !isSM || smtpLoaded) return;
     (async () => {
       try {
         const res = await fetch(`/api/projects/${projectId}/settings`);
@@ -389,24 +390,26 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
   const handleRemoveMember = async (memberId: string, name: string) => {
     if (!confirm(`Remove ${name} from this production? They will lose access.`)) return;
     try {
-      await fetch(`/api/projects/${projectId}/invites`, {
+      const res = await fetch(`/api/projects/${projectId}/invites`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId, action: "remove" }),
       });
-      window.location.reload();
+      if (res.ok) {
+        setLocalMembers((prev) => prev.filter((m) => m.id !== memberId));
+      }
     } catch {}
   };
 
-  const tabs: { id: SettingsTab; label: string; adminOnly: boolean }[] = [
-    { id: "preferences", label: "Preferences", adminOnly: false },
-    { id: "team", label: "Team", adminOnly: true },
-    { id: "roles", label: "Roles", adminOnly: true },
-    { id: "cue-types", label: "Cue Types", adminOnly: true },
-    { id: "email", label: "Email", adminOnly: true },
+  const tabs: { id: SettingsTab; label: string; visible: boolean }[] = [
+    { id: "preferences", label: "Preferences", visible: true },
+    { id: "team", label: "Team", visible: true },
+    { id: "roles", label: "Roles", visible: isAdmin },
+    { id: "cue-types", label: "Cue Types", visible: isAdmin },
+    { id: "email", label: "Email", visible: isSM },
   ];
 
-  const visibleTabs = tabs.filter((t) => !t.adminOnly || isAdmin);
+  const visibleTabs = tabs.filter((t) => t.visible);
 
   return (
     <div
@@ -622,83 +625,86 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           )}
 
           {/* ===== TEAM TAB ===== */}
-          {activeTab === "team" && isAdmin && (
+          {activeTab === "team" && (
             <div className="space-y-4">
-              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}>
-                Manage team members and send invitations.
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "#666" }}>
+                {isAdmin ? "Manage team members and send invitations." : "Production team members."}
               </p>
 
-              {/* Invite form */}
-              <div
-                className="p-4 rounded-lg space-y-3"
-                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
-              >
-                <div style={labelStyle}>Invite Collaborator</div>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="email@example.com"
-                    className="flex-1 px-3 py-2 rounded"
-                    style={inputStyle}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSendInvite();
-                    }}
-                  />
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as ProjectRole)}
-                    className="px-2 py-2 rounded"
-                    style={inputStyle}
-                  >
-                    {ROLE_LIST.map((r) => (
-                      <option key={r.id} value={r.id}>{r.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={handleSendInvite}
-                  disabled={inviteSending || !inviteEmail.trim()}
-                  className="px-4 py-2 rounded transition-colors"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#E8C547",
-                    background: "#E8C54715",
-                    border: "1px solid #E8C54740",
-                    opacity: inviteSending || !inviteEmail.trim() ? 0.5 : 1,
-                  }}
+              {/* Invite form — admin only */}
+              {isAdmin && (
+                <div
+                  className="p-4 rounded-lg space-y-3"
+                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
                 >
-                  {inviteSending ? "Sending..." : "Send Invite"}
-                </button>
-                {inviteError && (
-                  <div style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E87847" }}>
-                    {inviteError}
+                  <div style={labelStyle}>Invite Collaborator</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="flex-1 px-3 py-2 rounded"
+                      style={inputStyle}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSendInvite();
+                      }}
+                    />
+                    <select
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as ProjectRole)}
+                      className="px-2 py-2 rounded"
+                      style={inputStyle}
+                    >
+                      {ROLE_LIST.map((r) => (
+                        <option key={r.id} value={r.id}>{r.label}</option>
+                      ))}
+                    </select>
                   </div>
-                )}
-                {inviteSuccess && (
-                  <div style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#47E86A" }}>
-                    {inviteSuccess}
-                  </div>
-                )}
-              </div>
+                  <button
+                    onClick={handleSendInvite}
+                    disabled={inviteSending || !inviteEmail.trim()}
+                    className="px-4 py-2 rounded transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#E8C547",
+                      background: "#E8C54715",
+                      border: "1px solid #E8C54740",
+                      opacity: inviteSending || !inviteEmail.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {inviteSending ? "Sending..." : "Send Invite"}
+                  </button>
+                  {inviteError && (
+                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E87847" }}>
+                      {inviteError}
+                    </div>
+                  )}
+                  {inviteSuccess && (
+                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#47E86A" }}>
+                      {inviteSuccess}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Current members */}
               <div>
                 <div className="mb-2" style={labelStyle}>Members</div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {localMembers.map((m) => (
                     <div
                       key={m.id}
-                      className="px-3 py-2.5 rounded-lg"
+                      className="px-4 py-3 rounded-lg"
                       style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #222" }}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                          className="w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0"
                           style={{
+                            fontSize: 12,
                             background: "rgba(232,197,71,0.1)",
                             border: "1px solid #E8C54740",
                             color: "#E8C547",
@@ -708,74 +714,98 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                           {(m.name || "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#e0ddd5", fontWeight: 600 }}>
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "#e0ddd5", fontWeight: 600 }}>
                             {m.name}
                           </div>
-                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#666" }}>
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#666" }}>
                             {m.email}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveMember(m.id, m.name)}
-                          className="px-2 py-1 rounded text-[10px] hover:bg-red-500/10 transition-colors flex-shrink-0"
-                          style={{ fontFamily: "DM Mono, monospace", color: "#E84747", border: "1px solid #E8474730" }}
-                        >
-                          Remove
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleRemoveMember(m.id, m.name)}
+                            className="px-2 py-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
+                            style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E84747", border: "1px solid #E8474730" }}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
-                      {/* Multi-role checkboxes */}
-                      <div className="flex flex-wrap gap-1.5 mt-2 ml-10">
-                        {ROLE_LIST.map((r) => {
-                          const hasRole = m.roles.includes(r.id);
-                          return (
-                            <button
-                              key={r.id}
-                              onClick={() => {
-                                const newRoles = hasRole
-                                  ? m.roles.filter((x: ProjectRole) => x !== r.id)
-                                  : [...m.roles, r.id];
-                                if (newRoles.length > 0) handleUpdateMemberRoles(m.id, newRoles as ProjectRole[]);
-                              }}
-                              className="px-2 py-0.5 rounded transition-all"
-                              style={{
-                                fontFamily: "DM Mono, monospace",
-                                fontSize: 9,
-                                color: hasRole ? r.color : "#555",
-                                background: hasRole ? r.color + "15" : "transparent",
-                                border: `1px solid ${hasRole ? r.color + "40" : "#333"}`,
-                              }}
-                            >
-                              {r.icon} {r.label}
-                            </button>
-                          );
-                        })}
+                      {/* Role badges */}
+                      <div className="flex flex-wrap gap-1.5 mt-2 ml-12">
+                        {isAdmin ? (
+                          ROLE_LIST.map((r) => {
+                            const hasRole = m.roles.includes(r.id);
+                            return (
+                              <button
+                                key={r.id}
+                                onClick={() => {
+                                  const newRoles = hasRole
+                                    ? m.roles.filter((x: ProjectRole) => x !== r.id)
+                                    : [...m.roles, r.id];
+                                  if (newRoles.length > 0) handleUpdateMemberRoles(m.id, newRoles as ProjectRole[]);
+                                }}
+                                className="px-2.5 py-1 rounded transition-all"
+                                style={{
+                                  fontFamily: "DM Mono, monospace",
+                                  fontSize: 10,
+                                  color: hasRole ? r.color : "#555",
+                                  background: hasRole ? r.color + "15" : "transparent",
+                                  border: `1px solid ${hasRole ? r.color + "40" : "#333"}`,
+                                }}
+                              >
+                                {r.icon} {r.label}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          m.roles.map((roleId: ProjectRole) => {
+                            const r = ROLE_LIST.find((rl) => rl.id === roleId);
+                            if (!r) return null;
+                            return (
+                              <span
+                                key={r.id}
+                                className="px-2.5 py-1 rounded"
+                                style={{
+                                  fontFamily: "DM Mono, monospace",
+                                  fontSize: 10,
+                                  color: r.color,
+                                  background: r.color + "15",
+                                  border: `1px solid ${r.color}40`,
+                                }}
+                              >
+                                {r.icon} {r.label}
+                              </span>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Pending invites */}
-              {invites.filter((i) => i.status === "PENDING").length > 0 && (
+              {/* Pending invites — admin only */}
+              {isAdmin && invites.filter((i) => i.status === "PENDING").length > 0 && (
                 <div>
                   <div className="mb-2" style={labelStyle}>Pending Invites</div>
                   <div className="space-y-1.5">
                     {invites.filter((i) => i.status === "PENDING").map((inv) => (
                       <div
                         key={inv.id}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg group"
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg group"
                         style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed #2a2720" }}
                       >
-                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#888", flex: 1 }}>
+                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "#888", flex: 1 }}>
                           {inv.email}
                         </div>
-                        <span style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#E8C547" }}>
+                        <span style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E8C547" }}>
                           {inv.role.replace(/_/g, " ")}
                         </span>
                         <button
                           onClick={() => handleRevokeInvite(inv.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded text-[10px] hover:bg-red-500/10"
-                          style={{ fontFamily: "DM Mono, monospace", color: "#E84747", border: "1px solid #E8474740" }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-500/10"
+                          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E84747", border: "1px solid #E8474740" }}
                         >
                           Revoke
                         </button>
@@ -1244,7 +1274,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           )}
 
           {/* ===== EMAIL TAB ===== */}
-          {activeTab === "email" && isAdmin && (
+          {activeTab === "email" && isSM && (
             <div className="space-y-4">
               <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}>
                 Configure Gmail SMTP to send invite emails from your own address.
