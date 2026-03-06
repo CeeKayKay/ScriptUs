@@ -121,12 +121,18 @@ export async function PATCH(
     return NextResponse.json({ error: "commentId required" }, { status: 400 });
   }
 
-  const comment = await prisma.comment.update({
+  // Verify comment belongs to this project
+  const comment = await prisma.comment.findUnique({ where: { id: body.commentId } });
+  if (!comment || comment.projectId !== projectId) {
+    return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+  }
+
+  const updated = await prisma.comment.update({
     where: { id: body.commentId },
     data: { resolved: body.resolved ?? true },
   });
 
-  return NextResponse.json({ id: comment.id, resolved: comment.resolved });
+  return NextResponse.json({ id: updated.id, resolved: updated.resolved });
 }
 
 // DELETE /api/projects/[id]/comments — Delete a comment
