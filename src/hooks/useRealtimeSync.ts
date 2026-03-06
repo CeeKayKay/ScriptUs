@@ -21,8 +21,9 @@ type SyncMessage =
 export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
   const store = useStageStore;
   const broadcastRef = useRef<Y.Map<string> | null>(null);
-  const userIdRef = useRef(userId);
-  userIdRef.current = userId;
+  // Use a unique sender ID per tab (not per user) so the same user
+  // in two tabs can still see each other's live typing.
+  const senderIdRef = useRef(`${userId}-${Math.random().toString(36).slice(2, 8)}`);
 
   // Get or create the broadcast channel
   useEffect(() => {
@@ -42,7 +43,7 @@ export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
             const msg: SyncMessage = JSON.parse(raw);
 
             // Ignore our own messages
-            if (msg.senderId === userIdRef.current) return;
+            if (msg.senderId === senderIdRef.current) return;
 
             const s = store.getState();
 
@@ -114,7 +115,7 @@ export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
     (msg: Omit<SyncMessage, "senderId">) => {
       if (!broadcastRef.current || !doc) return;
 
-      const fullMsg = { ...msg, senderId: userIdRef.current };
+      const fullMsg = { ...msg, senderId: senderIdRef.current };
       const key = `${msg.type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       doc.transact(() => {
