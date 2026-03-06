@@ -252,9 +252,9 @@ export default function HomePage() {
           </h1>
           <p
             style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: 12,
-              color: "#666",
+              fontFamily: "Playfair Display, serif",
+              fontSize: 20,
+              color: "#c8c0b0",
             }}
           >
             Welcome back, {session?.user?.name || "Director"}
