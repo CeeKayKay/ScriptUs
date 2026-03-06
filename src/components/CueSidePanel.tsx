@@ -208,12 +208,12 @@ export function CueSidePanel() {
               inset: 0,
               zIndex: 40,
               width: "100%",
-              background: "#1a1916",
+              background: "var(--stage-surface)",
             }
           : {
               flexShrink: 0,
               width: 320,
-              background: "#1a1916",
+              background: "var(--stage-surface)",
               ...(cuePanelSide === "left"
                 ? { borderRight: `1px solid ${roleConfig.color}15` }
                 : { borderLeft: `1px solid ${roleConfig.color}15` }),
@@ -224,6 +224,7 @@ export function CueSidePanel() {
       <div
         className="flex items-center justify-between px-3.5 py-3 flex-shrink-0"
         style={{
+          background: "var(--stage-viewas-bg)",
           borderBottom: `1px solid ${roleConfig.color}15`,
         }}
       >
@@ -243,8 +244,8 @@ export function CueSidePanel() {
           <span
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: Math.round(scriptTextSize * 0.5),
-              color: "#555",
+              fontSize: Math.round(scriptTextSize * 0.6),
+              color: "var(--stage-text)",
             }}
           >
             {cues.length} cues
@@ -254,7 +255,7 @@ export function CueSidePanel() {
             className="text-xs px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors"
             style={{
               fontFamily: "DM Mono, monospace",
-              color: "#555",
+              color: "var(--stage-faint)",
             }}
           >
             ✕
@@ -284,12 +285,12 @@ export function CueSidePanel() {
 
           const statusColor =
             cue.status === "DRAFT"
-              ? "#E87847"
+              ? "var(--stage-danger)"
               : cue.status === "REVIEW"
-              ? "#E8C547"
+              ? "var(--stage-gold)"
               : cue.status === "APPROVED"
-              ? "#47E86A"
-              : "#888";
+              ? "var(--stage-success)"
+              : "var(--stage-muted)";
 
           return (
             <div
@@ -337,7 +338,7 @@ export function CueSidePanel() {
                     fontFamily: "DM Mono, monospace",
                     fontSize: Math.round(scriptTextSize * 0.65),
                     fontWeight: 700,
-                    color: isVisible ? cueConfig.color : "#666",
+                    color: isVisible ? cueConfig.color : "var(--stage-dim)",
                     letterSpacing: "0.03em",
                   }}
                 >
@@ -363,7 +364,7 @@ export function CueSidePanel() {
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: Math.round(scriptTextSize * 0.6),
-                    color: isVisible ? "#a09888" : "#555",
+                    color: isVisible ? "#a09888" : "var(--stage-faint)",
                     lineHeight: 1.5,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -388,10 +389,10 @@ export function CueSidePanel() {
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: Math.round(scriptTextSize * 0.6),
-                        color: "#c8c0b0",
+                        color: "var(--stage-heading)",
                         lineHeight: 1.6,
-                        background: "rgba(255,255,255,0.03)",
-                        border: "1px solid #2a2720",
+                        background: "var(--stage-hover)",
+                        border: "1px solid var(--stage-border)",
                         whiteSpace: "pre-wrap",
                       }}
                     >
@@ -406,7 +407,7 @@ export function CueSidePanel() {
                         style={{
                           fontFamily: "DM Mono, monospace",
                           fontSize: Math.round(scriptTextSize * 0.45),
-                          color: "#666",
+                          color: "var(--stage-dim)",
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
                           marginBottom: 4,
@@ -452,7 +453,7 @@ export function CueSidePanel() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: Math.round(scriptTextSize * 0.5),
-                      color: "#444",
+                      color: "var(--stage-ultra-faint)",
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
                       marginBottom: 8,
@@ -474,7 +475,7 @@ export function CueSidePanel() {
                         style={{
                           fontFamily: "DM Mono, monospace",
                           fontSize: Math.round(scriptTextSize * 0.5),
-                          color: "#E87847",
+                          color: "var(--stage-danger)",
                         }}
                       >
                         Delete this cue?
@@ -487,7 +488,7 @@ export function CueSidePanel() {
                           fontFamily: "DM Mono, monospace",
                           fontSize: Math.round(scriptTextSize * 0.45),
                           fontWeight: 700,
-                          color: "#E87847",
+                          color: "var(--stage-danger)",
                           border: "1px solid rgba(232, 120, 71, 0.4)",
                         }}
                       >
@@ -499,8 +500,8 @@ export function CueSidePanel() {
                         style={{
                           fontFamily: "DM Mono, monospace",
                           fontSize: Math.round(scriptTextSize * 0.45),
-                          color: "#888",
-                          border: "1px solid #333",
+                          color: "var(--stage-muted)",
+                          border: "1px solid var(--stage-border-subtle)",
                         }}
                       >
                         No
@@ -526,7 +527,7 @@ export function CueSidePanel() {
                         style={{
                           fontFamily: "DM Mono, monospace",
                           fontSize: Math.round(scriptTextSize * 0.5),
-                          color: "#E87847",
+                          color: "var(--stage-danger)",
                           border: "1px solid rgba(232, 120, 71, 0.3)",
                         }}
                       >
@@ -544,7 +545,7 @@ export function CueSidePanel() {
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: Math.round(scriptTextSize * 0.5),
-                    color: "#444",
+                    color: "var(--stage-ultra-faint)",
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
                   }}
@@ -575,8 +576,8 @@ export function CueSidePanel() {
             <p
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: Math.round(scriptTextSize * 0.55),
-                color: "#555",
+                fontSize: Math.round(scriptTextSize * 0.65),
+                color: "var(--stage-text)",
               }}
             >
               No cues assigned for this role yet

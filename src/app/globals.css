@@ -5,24 +5,94 @@
 @tailwind utilities;
 
 /* ============================================
-   SCRIPTUS — Global Styles
+   SCRIPTUS — Global Styles + Theming
    ============================================ */
 
-:root {
+/* ---- Dark Mode (default) ---- */
+:root,
+html.dark {
   --stage-bg: #13120f;
   --stage-surface: #1a1916;
   --stage-elevated: #222018;
   --stage-border: #2a2720;
+  --stage-border-subtle: #333;
   --stage-gold: #e8c547;
+  --stage-gold-bg: rgba(232, 197, 71, 0.08);
+  --stage-gold-border: rgba(232, 197, 71, 0.25);
   --stage-text: #e0ddd5;
-  --stage-muted: #8a8070;
-  --stage-dim: #555;
+  --stage-heading: #c8c0b0;
+  --stage-muted: #888;
+  --stage-dim: #666;
+  --stage-faint: #555;
+  --stage-ultra-faint: #444;
+  --stage-success: #47E86A;
+  --stage-danger: #E87847;
+  --stage-error: #E84747;
+  --stage-info: #47B8E8;
+  --stage-overlay: rgba(0, 0, 0, 0.7);
+  --stage-hover: rgba(255, 255, 255, 0.03);
+  --stage-hover-strong: rgba(255, 255, 255, 0.06);
+  --stage-line-hover: rgba(255, 255, 255, 0.02);
+  --stage-line-active: rgba(255, 255, 255, 0.04);
+  --stage-input-bg: #13120f;
+  --stage-scrollbar-thumb: #333;
+  --stage-scrollbar-hover: #444;
+  --stage-shadow: rgba(0, 0, 0, 0.3);
+  --stage-white: #fff;
+  --stage-viewas-bg: #13120f;
+  --stage-viewas-label: #fff;
+  --stage-showing-label: #fff;
 
   --cue-light: #47b8e8;
   --cue-sound: #e87847;
   --cue-props: #c847e8;
   --cue-set: #7be847;
   --cue-blocking: #e8c547;
+
+  color-scheme: dark;
+}
+
+/* ---- Light Mode ---- */
+html.light {
+  --stage-bg: #f5f3ef;
+  --stage-surface: #ffffff;
+  --stage-elevated: #f0ede8;
+  --stage-border: #d5d0c8;
+  --stage-border-subtle: #c8c0b5;
+  --stage-gold: #b8941a;
+  --stage-gold-bg: rgba(184, 148, 26, 0.08);
+  --stage-gold-border: rgba(184, 148, 26, 0.3);
+  --stage-text: #000000;
+  --stage-heading: #3d3830;
+  --stage-muted: #6b6560;
+  --stage-dim: #888;
+  --stage-faint: #aaa;
+  --stage-ultra-faint: #bbb;
+  --stage-success: #2d9e45;
+  --stage-danger: #c85a2a;
+  --stage-error: #c43030;
+  --stage-info: #2a8ab8;
+  --stage-overlay: rgba(0, 0, 0, 0.4);
+  --stage-hover: rgba(0, 0, 0, 0.03);
+  --stage-hover-strong: rgba(0, 0, 0, 0.06);
+  --stage-line-hover: rgba(0, 0, 0, 0.02);
+  --stage-line-active: rgba(0, 0, 0, 0.04);
+  --stage-input-bg: #f5f3ef;
+  --stage-scrollbar-thumb: #c0b8a8;
+  --stage-scrollbar-hover: #a8a090;
+  --stage-shadow: rgba(0, 0, 0, 0.1);
+  --stage-white: #fff;
+  --stage-viewas-bg: #000000;
+  --stage-viewas-label: #ffffff;
+  --stage-showing-label: #000000;
+
+  --cue-light: #2a8ab8;
+  --cue-sound: #c85a2a;
+  --cue-props: #9a30b8;
+  --cue-set: #4a9e20;
+  --cue-blocking: #b8941a;
+
+  color-scheme: light;
 }
 
 * {
@@ -38,6 +108,7 @@ body {
   font-family: "Libre Baskerville", serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 /* Scrollbar */
@@ -51,12 +122,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--stage-scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: var(--stage-scrollbar-hover);
 }
 
 /* Animations */
@@ -124,11 +195,11 @@ body {
 }
 
 .script-line:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--stage-line-hover);
 }
 
 .script-line.has-active-cue {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--stage-line-active);
 }
 
 /* Cue badge interactive states */
@@ -138,7 +209,7 @@ body {
 
 .cue-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px var(--stage-shadow);
 }
 
 /* Side panel cue items */
@@ -152,7 +223,7 @@ body {
 }
 
 .cue-panel-item.is-active {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--stage-hover-strong);
 }
 
 /* Focus styles */

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberView, CustomRoleView, CustomCueTypeView, CueStatus, CommentView } from "@/types";
+import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberView, CustomRoleView, CustomCueTypeView, CueStatus, CommentView, CharacterGroupView, CharacterView, LocationView } from "@/types";
 
 type CuePanelSide = "left" | "right";
 
@@ -64,7 +64,7 @@ interface StageStore {
   setScriptTextSize: (size: number) => void;
 
   // Scene/line mutations
-  addScene: (scene: SceneView) => void;
+  addScene: (scene: SceneView, position?: string) => void;
   addLineToScene: (sceneId: string, line: ScriptLineView) => void;
   updateSceneTitle: (sceneId: string, title: string) => void;
   updateLine: (sceneId: string, lineId: string, updates: Partial<ScriptLineView>) => void;
@@ -75,6 +75,14 @@ interface StageStore {
   addComment: (lineId: string, comment: CommentView) => void;
   resolveComment: (commentId: string) => void;
   removeComment: (commentId: string) => void;
+
+  // Writer: Characters & Locations
+  characterGroups: CharacterGroupView[];
+  ungroupedCharacters: CharacterView[];
+  locations: LocationView[];
+  setCharacterGroups: (groups: CharacterGroupView[]) => void;
+  setUngroupedCharacters: (chars: CharacterView[]) => void;
+  setLocations: (locs: LocationView[]) => void;
 
   // Search/filter
   searchQuery: string;
@@ -259,8 +267,17 @@ export const useStageStore = create<StageStore>((set) => ({
     set({ scriptTextSize: size });
   },
 
-  addScene: (scene) =>
-    set((s) => ({ scenes: [...s.scenes, scene] })),
+  addScene: (scene, position?: string) =>
+    set((s) => {
+      if (position === "start") return { scenes: [scene, ...s.scenes] };
+      if (position?.startsWith("after-act-") || position?.startsWith("between-")) {
+        // Insert sorted by act then scene number
+        const newScenes = [...s.scenes, scene];
+        newScenes.sort((a, b) => a.act !== b.act ? a.act - b.act : a.scene - b.scene);
+        return { scenes: newScenes };
+      }
+      return { scenes: [...s.scenes, scene] };
+    }),
   addLineToScene: (sceneId, line) =>
     set((s) => ({
       scenes: s.scenes.map((sc) =>
@@ -332,6 +349,13 @@ export const useStageStore = create<StageStore>((set) => ({
         })),
       })),
     })),
+
+  characterGroups: [],
+  ungroupedCharacters: [],
+  locations: [],
+  setCharacterGroups: (groups) => set({ characterGroups: groups }),
+  setUngroupedCharacters: (chars) => set({ ungroupedCharacters: chars }),
+  setLocations: (locs) => set({ locations: locs }),
 
   searchQuery: "",
   setSearchQuery: (q) => set({ searchQuery: q }),

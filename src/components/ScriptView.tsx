@@ -12,6 +12,7 @@ const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
   { value: "STAGE_DIRECTION", label: "Stage Direction" },
   { value: "SONG", label: "Song" },
   { value: "TRANSITION", label: "Transition" },
+  { value: "LOCATION", label: "Location" },
 ];
 
 interface ScriptViewProps {
@@ -50,6 +51,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
 
   // --- Add scene state ---
   const [showAddScene, setShowAddScene] = useState(false);
+  const [scenePosition, setScenePosition] = useState<string>("end"); // "start" | "end" | "after-act-N"
   const [newAct, setNewAct] = useState("1");
   const [newSceneNum, setNewSceneNum] = useState("1");
   const [newSceneTitle, setNewSceneTitle] = useState("");
@@ -65,9 +67,22 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
   // Can user write content?
   const canWrite = ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(activeRole);
 
-  // Bank of character names from existing lines
+  // --- Undo stack ---
+  type UndoAction =
+    | { type: "edit-line"; sceneId: string; lineId: string; prev: { text?: string; character?: string } }
+    | { type: "edit-title"; sceneId: string; prev: string };
+  const undoStackRef = useRef<UndoAction[]>([]);
+  const [undoCount, setUndoCount] = useState(0); // triggers re-render when stack changes
+
+  const { characterGroups, ungroupedCharacters, locations } = useStageStore();
+
+  // Bank of character names: merge store characters + names from existing lines
   const characterBank = useMemo(() => {
     const names = new Set<string>();
+    // From store (Writer panel)
+    characterGroups.forEach((g) => g.characters.forEach((c) => names.add(c.name)));
+    ungroupedCharacters.forEach((c) => names.add(c.name));
+    // From existing script lines
     scenes.forEach((scene) =>
       scene.lines.forEach((line) => {
         if (line.character && line.character.trim()) {
@@ -267,6 +282,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
           act: Number(newAct),
           scene: Number(newSceneNum),
           title: newSceneTitle.trim(),
+          position: scenePosition,
         }),
       });
 
@@ -277,8 +293,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
       }
 
       const scene = await res.json();
-      addScene(scene);
-      broadcast?.({ type: "scene-add", scene });
+      addScene(scene, scenePosition);
+      broadcast?.({ type: "scene-add", scene, position: scenePosition });
       setShowAddScene(false);
       setNewSceneTitle("");
       setNewSceneNum(String(Number(newSceneNum) + 1));
@@ -329,6 +345,12 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
   const handleEditLine = useCallback(
     async (lineId: string, updates: { text?: string; character?: string }) => {
       if (!projectId) return;
+      // Save previous state for undo
+      const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
+      const prevLine = scene?.lines.find((l) => l.id === lineId);
+      const prev: { text?: string; character?: string } = {};
+      if (updates.text !== undefined && prevLine) prev.text = prevLine.text;
+      if (updates.character !== undefined && prevLine) prev.character = prevLine.character || "";
       try {
         const res = await fetch(`/api/projects/${projectId}/scenes`, {
           method: "PATCH",
@@ -337,9 +359,11 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
         });
         if (!res.ok) return;
         const data = await res.json();
-        // Find which scene this line belongs to
-        const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
         if (scene) {
+          if (Object.keys(prev).length > 0) {
+            undoStackRef.current.push({ type: "edit-line", sceneId: scene.id, lineId, prev });
+            setUndoCount(undoStackRef.current.length);
+          }
           updateLine(scene.id, lineId, { text: data.text, character: data.character });
           broadcast?.({ type: "line-update", sceneId: scene.id, lineId, updates: { text: data.text, character: data.character } });
         }
@@ -370,6 +394,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
   const handleEditSceneTitle = useCallback(
     async (sceneId: string, title: string) => {
       if (!projectId) return;
+      const prevScene = scenes.find((s) => s.id === sceneId);
+      const prevTitle = prevScene?.title || "";
       try {
         const res = await fetch(`/api/projects/${projectId}/scenes`, {
           method: "PATCH",
@@ -377,11 +403,13 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
           body: JSON.stringify({ sceneId, title }),
         });
         if (!res.ok) return;
+        undoStackRef.current.push({ type: "edit-title", sceneId, prev: prevTitle });
+        setUndoCount(undoStackRef.current.length);
         updateSceneTitle(sceneId, title);
         broadcast?.({ type: "scene-title", sceneId, title });
       } catch {}
     },
-    [projectId, updateSceneTitle, broadcast]
+    [projectId, scenes, updateSceneTitle, broadcast]
   );
 
   const handleDeleteScene = useCallback(
@@ -400,6 +428,55 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
     [projectId, deleteScene, broadcast]
   );
 
+  const handleUndo = useCallback(async () => {
+    const action = undoStackRef.current.pop();
+    if (!action || !projectId) return;
+    setUndoCount(undoStackRef.current.length);
+
+    if (action.type === "edit-line") {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/scenes`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lineId: action.lineId, ...action.prev }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        updateLine(action.sceneId, action.lineId, { text: data.text, character: data.character });
+        broadcast?.({ type: "line-update", sceneId: action.sceneId, lineId: action.lineId, updates: { text: data.text, character: data.character } });
+      } catch {}
+    } else if (action.type === "edit-title") {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/scenes`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId: action.sceneId, title: action.prev }),
+        });
+        if (!res.ok) return;
+        updateSceneTitle(action.sceneId, action.prev);
+        broadcast?.({ type: "scene-title", sceneId: action.sceneId, title: action.prev });
+      } catch {}
+    }
+  }, [projectId, updateLine, updateSceneTitle, broadcast]);
+
+  // Ctrl+Z global undo shortcut
+  useEffect(() => {
+    if (!canWrite) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        // Only intercept if not inside a contentEditable (browser handles its own undo there)
+        const active = document.activeElement;
+        if (active && (active as HTMLElement).isContentEditable) return;
+        if (undoStackRef.current.length > 0) {
+          e.preventDefault();
+          handleUndo();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canWrite, handleUndo]);
+
   // Group scenes for "add line" buttons
   const sceneIds = scenes.map((s) => s.id);
 
@@ -414,8 +491,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
         <div
           className="sticky top-0 z-10 flex items-center justify-center gap-1 py-2 px-1"
           style={{
-            background: "#13120f",
-            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            background: "var(--stage-bg)",
+            borderBottom: "1px solid var(--stage-hover)",
           }}
         >
           <FormatBarButton
@@ -451,9 +528,49 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
               restoreFocusToEditor();
             }}
           />
+          <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 4px" }} />
+          <FormatBarButton
+            label={`\u21A9 Undo${undoCount > 0 ? ` (${undoCount})` : ""}`}
+            title="Undo last edit (Ctrl+Z)"
+            onClick={handleUndo}
+            disabled={undoCount === 0}
+          />
         </div>
       )}
       <div style={{ maxWidth: isMobile ? "100%" : 740, margin: "0 auto", paddingTop: isMobile ? 8 : 16 }}>
+        {/* Add scene at the top */}
+        {canWrite && scenes.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            {showAddScene && scenePosition === "start" ? (
+              <AddSceneForm
+                newAct={newAct}
+                setNewAct={setNewAct}
+                newSceneNum={newSceneNum}
+                setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle}
+                setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving}
+                scriptTextSize={scriptTextSize}
+                onSubmit={handleCreateScene}
+                onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+              />
+            ) : (
+              <button
+                onClick={() => { setScenePosition("start"); setShowAddScene(true); }}
+                className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 16,
+                  color: "var(--stage-dim)",
+                  border: "1px dashed var(--stage-border-subtle)",
+                }}
+              >
+                + Add Scene Before
+              </button>
+            )}
+          </div>
+        )}
+
         {allLines.map((line, idx) => {
           const isSceneEnd = sceneIds.some(
             (sid) => sceneEndIndices[sid] === idx
@@ -461,6 +578,10 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
           const endSceneId = isSceneEnd
             ? Object.entries(sceneEndIndices).find(([, i]) => i === idx)?.[0]
             : null;
+
+          const isActHeader = line.type === "ACT_HEADER";
+          const actKey = isActHeader ? line.id.replace("act-", "") : "";
+          const afterActPos = `after-act-${actKey}`;
 
           return (
             <div key={line.id}>
@@ -487,6 +608,44 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                 onDeleteComment={handleDeleteComment}
               />
 
+              {/* + Add Scene after ACT header */}
+              {isActHeader && canWrite && (
+                <div style={{ margin: "8px 0" }}>
+                  {showAddScene && scenePosition === afterActPos ? (
+                    <AddSceneForm
+                      newAct={newAct}
+                      setNewAct={setNewAct}
+                      newSceneNum={newSceneNum}
+                      setNewSceneNum={setNewSceneNum}
+                      newSceneTitle={newSceneTitle}
+                      setNewSceneTitle={setNewSceneTitle}
+                      sceneSaving={sceneSaving}
+                      scriptTextSize={scriptTextSize}
+                      onSubmit={handleCreateScene}
+                      onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setNewAct(actKey);
+                        setNewSceneNum("0");
+                        setScenePosition(afterActPos);
+                        setShowAddScene(true);
+                      }}
+                      className="w-full px-4 py-2 rounded-lg transition-colors hover:bg-white/3"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 14,
+                        color: "var(--stage-dim)",
+                        border: "1px dashed var(--stage-border-subtle)",
+                      }}
+                    >
+                      + Add Scene
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Inline comment form */}
               {commentingLine === line.id && (
                 <div
@@ -502,9 +661,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                       style={{
                         fontFamily: "Libre Baskerville, serif",
                         fontSize: 12,
-                        color: "#888",
+                        color: "var(--stage-muted)",
                         fontStyle: "italic",
-                        background: "rgba(255,255,255,0.03)",
+                        background: "var(--stage-hover)",
                         borderLeft: "2px solid #47B8E8",
                       }}
                     >
@@ -520,9 +679,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 13,
-                      background: "#13120f",
-                      border: "1px solid #2a2720",
-                      color: "#e0ddd5",
+                      background: "var(--stage-bg)",
+                      border: "1px solid var(--stage-border)",
+                      color: "var(--stage-text)",
                       outline: "none",
                     }}
                     onKeyDown={(e) => {
@@ -545,7 +704,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                         fontFamily: "DM Mono, monospace",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#47B8E8",
+                        color: "var(--stage-info)",
                         background: "rgba(71, 184, 232, 0.1)",
                         border: "1px solid rgba(71, 184, 232, 0.3)",
                         opacity: commentSaving || !commentText.trim() ? 0.5 : 1,
@@ -559,8 +718,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: 11,
-                        color: "#888",
-                        border: "1px solid #333",
+                        color: "var(--stage-muted)",
+                        border: "1px solid var(--stage-border-subtle)",
                       }}
                     >
                       Cancel
@@ -569,7 +728,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: 10,
-                        color: "#555",
+                        color: "var(--stage-faint)",
                         alignSelf: "center",
                       }}
                     >
@@ -586,8 +745,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                     <div
                       className="p-3 rounded-lg space-y-2"
                       style={{
-                        background: "rgba(255,255,255,0.02)",
-                        border: "1px solid #2a2720",
+                        background: "var(--stage-line-hover)",
+                        border: "1px solid var(--stage-border)",
                       }}
                     >
                       <div className="flex gap-2 items-center">
@@ -598,9 +757,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                           style={{
                             fontFamily: "DM Mono, monospace",
                             fontSize: isMobile ? 14 : 22,
-                            background: "#13120f",
-                            border: "1px solid #2a2720",
-                            color: "#e0ddd5",
+                            background: "var(--stage-bg)",
+                            border: "1px solid var(--stage-border)",
+                            color: "var(--stage-text)",
                             outline: "none",
                           }}
                         >
@@ -641,9 +800,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                               ? "Libre Baskerville, serif"
                               : "DM Mono, monospace",
                           fontSize: isMobile ? 14 : 22,
-                          background: "#13120f",
-                          border: "1px solid #2a2720",
-                          color: "#e0ddd5",
+                          background: "var(--stage-bg)",
+                          border: "1px solid var(--stage-border)",
+                          color: "var(--stage-text)",
                           outline: "none",
                           lineHeight: 1.7,
                           fontStyle:
@@ -667,7 +826,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                             fontFamily: "DM Mono, monospace",
                             fontSize: 18,
                             fontWeight: 600,
-                            color: "#E8C547",
+                            color: "var(--stage-gold)",
                             background: "#E8C54715",
                             border: "1px solid #E8C54740",
                             opacity: lineSaving || !newLineText.trim() ? 0.5 : 1,
@@ -679,7 +838,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                           style={{
                             fontFamily: "DM Mono, monospace",
                             fontSize: 16,
-                            color: "#555",
+                            color: "var(--stage-faint)",
                           }}
                         >
                           Ctrl+Enter to submit
@@ -697,8 +856,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                           style={{
                             fontFamily: "DM Mono, monospace",
                             fontSize: 18,
-                            color: "#888",
-                            border: "1px solid #333",
+                            color: "var(--stage-muted)",
+                            border: "1px solid var(--stage-border-subtle)",
                           }}
                         >
                           Done
@@ -712,11 +871,52 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: 18,
-                        color: "#555",
-                        border: "1px dashed #2a2720",
+                        color: "var(--stage-faint)",
+                        border: "1px dashed var(--stage-border)",
                       }}
                     >
                       + Add line
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* + Add Scene between scenes */}
+              {isSceneEnd && endSceneId && canWrite && (
+                <div style={{ marginBottom: 8 }}>
+                  {showAddScene && scenePosition === `between-${endSceneId}` ? (
+                    <AddSceneForm
+                      newAct={newAct}
+                      setNewAct={setNewAct}
+                      newSceneNum={newSceneNum}
+                      setNewSceneNum={setNewSceneNum}
+                      newSceneTitle={newSceneTitle}
+                      setNewSceneTitle={setNewSceneTitle}
+                      sceneSaving={sceneSaving}
+                      scriptTextSize={scriptTextSize}
+                      onSubmit={handleCreateScene}
+                      onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const scene = scenes.find((s) => s.id === endSceneId);
+                        if (scene) {
+                          setNewAct(String(scene.act));
+                          setNewSceneNum(String(scene.scene + 1));
+                        }
+                        setScenePosition(`between-${endSceneId}`);
+                        setShowAddScene(true);
+                      }}
+                      className="w-full px-4 py-2 rounded-lg transition-colors hover:bg-white/3"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 14,
+                        color: "var(--stage-dim)",
+                        border: "1px dashed var(--stage-border-subtle)",
+                      }}
+                    >
+                      + Add Scene
                     </button>
                   )}
                 </div>
@@ -731,7 +931,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
               style={{
                 fontFamily: "Playfair Display, serif",
                 fontSize: 20,
-                color: "#555",
+                color: "var(--stage-faint)",
               }}
             >
               No script content yet
@@ -740,7 +940,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 12,
-                color: "#444",
+                color: "var(--stage-ultra-faint)",
                 marginTop: 8,
               }}
             >
@@ -751,167 +951,73 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
           </div>
         )}
 
-        {/* Add Scene button / form */}
+        {/* Add Scene button / form at bottom */}
         {canWrite && (
           <div style={{ marginTop: 24 }}>
-            {showAddScene ? (
-              <div
-                className="p-4 rounded-lg space-y-3"
-                style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid #2a2720",
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 0.55),
-                    color: "#888",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    marginBottom: 8,
-                  }}
-                >
-                  New Scene
-                </div>
-
-                <div className="flex gap-3">
-                  <div style={{ width: 80 }}>
-                    <label
-                      className="block mb-1"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: Math.round(scriptTextSize * 0.5),
-                        color: "#888",
-                      }}
-                    >
-                      Act
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={newAct}
-                      onChange={(e) => setNewAct(e.target.value)}
-                      className="w-full px-3 py-2 rounded"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: scriptTextSize,
-                        background: "#13120f",
-                        border: "1px solid #2a2720",
-                        color: "#e0ddd5",
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                  <div style={{ width: 80 }}>
-                    <label
-                      className="block mb-1"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: Math.round(scriptTextSize * 0.5),
-                        color: "#888",
-                      }}
-                    >
-                      Scene
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={newSceneNum}
-                      onChange={(e) => setNewSceneNum(e.target.value)}
-                      className="w-full px-3 py-2 rounded"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: scriptTextSize,
-                        background: "#13120f",
-                        border: "1px solid #2a2720",
-                        color: "#e0ddd5",
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label
-                      className="block mb-1"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: Math.round(scriptTextSize * 0.5),
-                        color: "#888",
-                      }}
-                    >
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      value={newSceneTitle}
-                      onChange={(e) => setNewSceneTitle(e.target.value)}
-                      placeholder="e.g. The Arrival"
-                      className="w-full px-3 py-2 rounded"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: scriptTextSize,
-                        background: "#13120f",
-                        border: "1px solid #2a2720",
-                        color: "#e0ddd5",
-                        outline: "none",
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleCreateScene();
-                        }
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setShowAddScene(false);
-                      setNewSceneTitle("");
-                    }}
-                    className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
-                    style={{
-                      fontFamily: "DM Mono, monospace",
-                      fontSize: 11,
-                      color: "#888",
-                      border: "1px solid #333",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateScene}
-                    disabled={sceneSaving || !newSceneTitle.trim()}
-                    className="px-3 py-1.5 rounded transition-colors"
-                    style={{
-                      fontFamily: "DM Mono, monospace",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#E8C547",
-                      background: "#E8C54715",
-                      border: "1px solid #E8C54740",
-                      opacity: sceneSaving || !newSceneTitle.trim() ? 0.5 : 1,
-                    }}
-                  >
-                    {sceneSaving ? "Creating..." : "Add Scene"}
-                  </button>
-                </div>
-              </div>
+            {showAddScene && scenePosition === "end" ? (
+              <AddSceneForm
+                newAct={newAct}
+                setNewAct={setNewAct}
+                newSceneNum={newSceneNum}
+                setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle}
+                setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving}
+                scriptTextSize={scriptTextSize}
+                onSubmit={handleCreateScene}
+                onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+              />
             ) : (
               <button
-                onClick={() => setShowAddScene(true)}
+                onClick={() => { setScenePosition("end"); setShowAddScene(true); }}
                 className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 12,
-                  color: "#666",
-                  border: "1px dashed #333",
+                  fontSize: 16,
+                  color: "var(--stage-dim)",
+                  border: "1px dashed var(--stage-border-subtle)",
                 }}
               >
                 + Add Scene
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* + New Act button */}
+        {canWrite && (
+          <div style={{ marginTop: 12 }}>
+            {showAddScene && scenePosition === "new-act" ? (
+              <AddSceneForm
+                newAct={newAct}
+                setNewAct={setNewAct}
+                newSceneNum={newSceneNum}
+                setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle}
+                setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving}
+                scriptTextSize={scriptTextSize}
+                onSubmit={handleCreateScene}
+                onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+              />
+            ) : (
+              <button
+                onClick={() => {
+                  const maxAct = scenes.reduce((max, s) => Math.max(max, s.act), 0);
+                  setNewAct(String(maxAct + 1));
+                  setNewSceneNum("1");
+                  setScenePosition("new-act");
+                  setShowAddScene(true);
+                }}
+                className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 16,
+                  color: "var(--stage-gold)",
+                  border: "1px dashed var(--stage-gold-border)",
+                }}
+              >
+                + New Act
               </button>
             )}
           </div>
@@ -1002,9 +1108,9 @@ function CharacterPicker({
             fontFamily: "DM Mono, monospace",
             fontSize: isMobile ? 14 : 22,
             width: isMobile ? 140 : 200,
-            background: "#13120f",
-            border: "1px solid #2a2720",
-            color: "#E8C547",
+            background: "var(--stage-bg)",
+            border: "1px solid var(--stage-border)",
+            color: "var(--stage-gold)",
             fontWeight: 700,
             outline: "none",
           }}
@@ -1023,9 +1129,9 @@ function CharacterPicker({
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: isMobile ? 12 : 18,
-              color: "#666",
-              border: "1px solid #2a2720",
-              background: "#13120f",
+              color: "var(--stage-dim)",
+              border: "1px solid var(--stage-border)",
+              background: "var(--stage-bg)",
               lineHeight: 1,
             }}
           >
@@ -1039,9 +1145,9 @@ function CharacterPicker({
         <div
           className="absolute z-20 mt-1 w-full rounded-lg overflow-hidden"
           style={{
-            background: "#1a1916",
-            border: "1px solid #2a2720",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            background: "var(--stage-surface)",
+            border: "1px solid var(--stage-border)",
+            boxShadow: "0 8px 24px var(--stage-overlay)",
             maxHeight: 200,
             overflowY: "auto",
             minWidth: isMobile ? 140 : 200,
@@ -1057,7 +1163,7 @@ function CharacterPicker({
                 fontFamily: "DM Mono, monospace",
                 fontSize: isMobile ? 13 : 18,
                 fontWeight: 700,
-                color: name === value ? "#E8C547" : "#c8c0b0",
+                color: name === value ? "var(--stage-gold)" : "var(--stage-heading)",
                 background: name === value ? "#E8C54710" : "transparent",
               }}
             >
@@ -1072,8 +1178,8 @@ function CharacterPicker({
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: isMobile ? 13 : 18,
-                color: "#47E86A",
-                borderTop: filtered.length > 0 ? "1px solid #2a2720" : "none",
+                color: "var(--stage-success)",
+                borderTop: filtered.length > 0 ? "1px solid var(--stage-border)" : "none",
               }}
             >
               + Add &ldquo;{filter.toUpperCase()}&rdquo;
@@ -1085,7 +1191,7 @@ function CharacterPicker({
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: isMobile ? 12 : 16,
-                color: "#555",
+                color: "var(--stage-faint)",
               }}
             >
               Type a character name
@@ -1190,28 +1296,199 @@ function restoreFocusToEditor() {
   if (active) active.focus();
 }
 
-function FormatBarButton({ label, title, onClick, bold }: { label: string; title: string; onClick: () => void; bold?: boolean }) {
+function FormatBarButton({ label, title, onClick, bold, disabled }: { label: string; title: string; onClick: () => void; bold?: boolean; disabled?: boolean }) {
   return (
     <button
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
+      disabled={disabled}
       title={title}
       style={{
         fontFamily: "DM Mono, monospace",
         fontSize: 12,
         fontWeight: bold ? 900 : 400,
-        color: "#999",
+        color: disabled ? "var(--stage-ultra-faint)" : "#999",
         background: "transparent",
-        border: "1px solid #333",
+        border: "1px solid var(--stage-border-subtle)",
         borderRadius: 4,
         padding: "4px 10px",
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
         lineHeight: 1.4,
+        opacity: disabled ? 0.5 : 1,
       }}
       className="hover:bg-white/5 transition-colors"
     >
       {label}
     </button>
+  );
+}
+
+function AddSceneForm({
+  newAct,
+  setNewAct,
+  newSceneNum,
+  setNewSceneNum,
+  newSceneTitle,
+  setNewSceneTitle,
+  sceneSaving,
+  scriptTextSize,
+  onSubmit,
+  onCancel,
+}: {
+  newAct: string;
+  setNewAct: (v: string) => void;
+  newSceneNum: string;
+  setNewSceneNum: (v: string) => void;
+  newSceneTitle: string;
+  setNewSceneTitle: (v: string) => void;
+  sceneSaving: boolean;
+  scriptTextSize: number;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="p-4 rounded-lg space-y-3"
+      style={{
+        background: "var(--stage-line-hover)",
+        border: "1px solid var(--stage-border)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "DM Mono, monospace",
+          fontSize: Math.round(scriptTextSize * 0.55),
+          color: "var(--stage-muted)",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        New Scene
+      </div>
+
+      <div className="flex gap-3">
+        <div style={{ width: 80 }}>
+          <label
+            className="block mb-1"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: Math.round(scriptTextSize * 0.5),
+              color: "var(--stage-muted)",
+            }}
+          >
+            Act
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={newAct}
+            onChange={(e) => setNewAct(e.target.value)}
+            className="w-full px-3 py-2 rounded"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: scriptTextSize,
+              background: "var(--stage-bg)",
+              border: "1px solid var(--stage-border)",
+              color: "var(--stage-text)",
+              outline: "none",
+            }}
+          />
+        </div>
+        <div style={{ width: 80 }}>
+          <label
+            className="block mb-1"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: Math.round(scriptTextSize * 0.5),
+              color: "var(--stage-muted)",
+            }}
+          >
+            Scene
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={newSceneNum}
+            onChange={(e) => setNewSceneNum(e.target.value)}
+            className="w-full px-3 py-2 rounded"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: scriptTextSize,
+              background: "var(--stage-bg)",
+              border: "1px solid var(--stage-border)",
+              color: "var(--stage-text)",
+              outline: "none",
+            }}
+          />
+        </div>
+        <div className="flex-1">
+          <label
+            className="block mb-1"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: Math.round(scriptTextSize * 0.5),
+              color: "var(--stage-muted)",
+            }}
+          >
+            Title
+          </label>
+          <input
+            type="text"
+            value={newSceneTitle}
+            onChange={(e) => setNewSceneTitle(e.target.value)}
+            placeholder="e.g. The Arrival"
+            className="w-full px-3 py-2 rounded"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: scriptTextSize,
+              background: "var(--stage-bg)",
+              border: "1px solid var(--stage-border)",
+              color: "var(--stage-text)",
+              outline: "none",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSubmit();
+              }
+            }}
+            autoFocus
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            color: "var(--stage-muted)",
+            border: "1px solid var(--stage-border-subtle)",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={sceneSaving || !newSceneTitle.trim()}
+          className="px-3 py-1.5 rounded transition-colors"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--stage-gold)",
+            background: "#E8C54715",
+            border: "1px solid #E8C54740",
+            opacity: sceneSaving || !newSceneTitle.trim() ? 0.5 : 1,
+          }}
+        >
+          {sceneSaving ? "Creating..." : "Add Scene"}
+        </button>
+      </div>
+    </div>
   );
 }
 

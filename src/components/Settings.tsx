@@ -6,6 +6,7 @@ import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPE_LIST } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useTheme } from "@/hooks/useTheme";
 import type { ProjectRole, CustomRoleView, CustomCueTypeView } from "@/types";
 
 interface SettingsProps {
@@ -28,17 +29,17 @@ const PRESET_ICONS = ["●", "◆", "◎", "✦", "▧", "☀", "♫", "★", "�
 
 const inputStyle = {
   fontFamily: "DM Mono, monospace",
-  fontSize: 13,
-  background: "#13120f",
-  border: "1px solid #2a2720",
-  color: "#e0ddd5",
+  fontSize: 16,
+  background: "var(--stage-bg)",
+  border: "1px solid var(--stage-border)",
+  color: "var(--stage-text)",
   outline: "none",
 } as const;
 
 const labelStyle = {
   fontFamily: "DM Mono, monospace",
-  fontSize: 10,
-  color: "#888",
+  fontSize: 15,
+  color: "var(--stage-text)",
   letterSpacing: "0.08em",
   textTransform: "uppercase" as const,
 } as const;
@@ -55,6 +56,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     members,
   } = useStageStore();
 
+  const { theme, toggleTheme } = useTheme();
   const isAdmin = myRoles.some((r) => ADMIN_ROLES.includes(r));
   const isSM = myRoles.includes("STAGE_MANAGER");
   const isMobile = useIsMobile();
@@ -369,22 +371,29 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     } catch {}
   };
 
-  // Local member state for optimistic UI updates
+  // Local member state for optimistic UI updates (no useEffect sync — updates happen locally)
   const [localMembers, setLocalMembers] = useState(members);
-  useEffect(() => { setLocalMembers(members); }, [members]);
 
-  const handleUpdateMemberRoles = (memberId: string, roles: ProjectRole[]) => {
+  const handleUpdateMemberRoles = async (memberId: string, roles: ProjectRole[]) => {
     if (roles.length === 0) return;
+    const prev = localMembers;
     // Optimistic update
-    setLocalMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, roles } : m))
+    setLocalMembers((members) =>
+      members.map((m) => (m.id === memberId ? { ...m, roles } : m))
     );
-    // Fire and forget API call
-    fetch(`/api/projects/${projectId}/invites`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId, roles }),
-    }).catch(() => {});
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invites`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, roles }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setLocalMembers(prev);
+      }
+    } catch {
+      setLocalMembers(prev);
+    }
   };
 
   const handleRemoveMember = async (memberId: string, name: string) => {
@@ -414,14 +423,14 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.7)" }}
+      style={{ background: "var(--stage-overlay)" }}
     >
       <div
         className="w-full animate-fade-in"
         style={{
-          background: "#1a1916",
-          border: isMobile ? "none" : "1px solid #2a2720",
-          boxShadow: isMobile ? "none" : "0 25px 50px rgba(0,0,0,0.5)",
+          background: "var(--stage-surface)",
+          border: isMobile ? "none" : "1px solid var(--stage-border)",
+          boxShadow: isMobile ? "none" : "0 25px 50px var(--stage-overlay)",
           borderRadius: isMobile ? 0 : 12,
           maxWidth: isMobile ? "100%" : "36rem",
           maxHeight: isMobile ? "100%" : "80vh",
@@ -433,14 +442,14 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: "1px solid #2a2720" }}
+          style={{ borderBottom: "1px solid var(--stage-border)" }}
         >
           <h2
             style={{
               fontFamily: "Playfair Display, serif",
-              fontSize: 18,
+              fontSize: 22,
               fontWeight: 600,
-              color: "#e0ddd5",
+              color: "var(--stage-text)",
             }}
           >
             Settings
@@ -448,7 +457,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           <button
             onClick={closeSettings}
             className="text-sm px-2 py-1 rounded hover:bg-white/5"
-            style={{ fontFamily: "DM Mono, monospace", color: "#888" }}
+            style={{ fontFamily: "DM Mono, monospace", color: "var(--stage-muted)" }}
           >
             X
           </button>
@@ -457,7 +466,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
         {/* Tab bar */}
         <div
           className="flex gap-1 px-6 py-2 flex-shrink-0"
-          style={{ borderBottom: "1px solid #2a2720" }}
+          style={{ borderBottom: "1px solid var(--stage-border)" }}
         >
           {visibleTabs.map((tab) => (
             <button
@@ -466,9 +475,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               className="px-3 py-1.5 rounded-md transition-all"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: activeTab === tab.id ? 700 : 400,
-                color: activeTab === tab.id ? "#E8C547" : "#777",
+                color: activeTab === tab.id ? "var(--stage-gold)" : "var(--stage-text)",
                 background: activeTab === tab.id ? "#E8C54712" : "transparent",
                 border:
                   activeTab === tab.id
@@ -486,6 +495,33 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           {/* ===== PREFERENCES TAB ===== */}
           {activeTab === "preferences" && (
             <div className="space-y-6">
+              {/* Theme toggle */}
+              <div>
+                <label className="block mb-2" style={labelStyle}>
+                  Appearance
+                </label>
+                <div className="flex gap-2">
+                  {(["dark", "light"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => { if (theme !== t) toggleTheme(); }}
+                      className="flex-1 px-4 py-3 rounded-lg transition-all"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 14,
+                        fontWeight: theme === t ? 700 : 400,
+                        color: theme === t ? "var(--stage-gold)" : "var(--stage-dim)",
+                        background: theme === t ? "var(--stage-gold-bg)" : "var(--stage-hover)",
+                        border: `1px solid ${theme === t ? "var(--stage-gold-border)" : "var(--stage-border-subtle)"}`,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {t === "dark" ? "Dark" : "Light"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block mb-2" style={labelStyle}>
                   Cue Panel Position
@@ -494,8 +530,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-3"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#666",
+                    fontSize: 13,
+                    color: "var(--stage-dim)",
                   }}
                 >
                   Choose which side the cue panel appears on for operator roles.
@@ -508,15 +544,15 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                       className="flex-1 px-4 py-3 rounded-lg transition-all"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: cuePanelSide === side ? 700 : 400,
-                        color: cuePanelSide === side ? "#E8C547" : "#666",
+                        color: cuePanelSide === side ? "var(--stage-gold)" : "var(--stage-dim)",
                         background:
                           cuePanelSide === side
                             ? "#E8C54712"
-                            : "rgba(255,255,255,0.02)",
+                            : "var(--stage-line-hover)",
                         border: `1px solid ${
-                          cuePanelSide === side ? "#E8C54740" : "#333"
+                          cuePanelSide === side ? "#E8C54740" : "var(--stage-border-subtle)"
                         }`,
                         textTransform: "capitalize",
                       }}
@@ -536,8 +572,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-3"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#666",
+                    fontSize: 13,
+                    color: "var(--stage-dim)",
                   }}
                 >
                   Adjust the size of dialogue and script text.
@@ -551,14 +587,14 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     value={scriptTextSize}
                     onChange={(e) => setScriptTextSize(Number(e.target.value))}
                     className="flex-1"
-                    style={{ accentColor: "#E8C547" }}
+                    style={{ accentColor: "var(--stage-gold)" }}
                   />
                   <span
                     style={{
                       fontFamily: "DM Mono, monospace",
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: 700,
-                      color: "#E8C547",
+                      color: "var(--stage-gold)",
                       minWidth: 40,
                       textAlign: "center",
                     }}
@@ -574,15 +610,15 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                       className="px-3 py-1.5 rounded-lg transition-all"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: scriptTextSize === size ? 700 : 400,
-                        color: scriptTextSize === size ? "#E8C547" : "#666",
+                        color: scriptTextSize === size ? "var(--stage-gold)" : "var(--stage-dim)",
                         background:
                           scriptTextSize === size
                             ? "#E8C54712"
-                            : "rgba(255,255,255,0.02)",
+                            : "var(--stage-line-hover)",
                         border: `1px solid ${
-                          scriptTextSize === size ? "#E8C54740" : "#333"
+                          scriptTextSize === size ? "#E8C54740" : "var(--stage-border-subtle)"
                         }`,
                       }}
                     >
@@ -593,15 +629,15 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                 <div
                   className="mt-3 px-4 py-3 rounded-lg"
                   style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid #2a2720",
+                    background: "var(--stage-line-hover)",
+                    border: "1px solid var(--stage-border)",
                   }}
                 >
                   <span
                     style={{
                       fontFamily: "DM Mono, monospace",
-                      fontSize: 9,
-                      color: "#555",
+                      fontSize: 12,
+                      color: "var(--stage-faint)",
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
                     }}
@@ -627,7 +663,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           {/* ===== TEAM TAB ===== */}
           {activeTab === "team" && (
             <div className="space-y-4">
-              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "#666" }}>
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 15, color: "var(--stage-text)" }}>
                 {isAdmin ? "Manage team members and send invitations." : "Production team members."}
               </p>
 
@@ -635,7 +671,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               {isAdmin && (
                 <div
                   className="p-4 rounded-lg space-y-3"
-                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
+                  style={{ background: "var(--stage-line-hover)", border: "1px solid var(--stage-border)" }}
                 >
                   <div style={labelStyle}>Invite Collaborator</div>
                   <div className="flex gap-2">
@@ -667,9 +703,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     className="px-4 py-2 rounded transition-colors"
                     style={{
                       fontFamily: "DM Mono, monospace",
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: 600,
-                      color: "#E8C547",
+                      color: "var(--stage-gold)",
                       background: "#E8C54715",
                       border: "1px solid #E8C54740",
                       opacity: inviteSending || !inviteEmail.trim() ? 0.5 : 1,
@@ -678,12 +714,12 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     {inviteSending ? "Sending..." : "Send Invite"}
                   </button>
                   {inviteError && (
-                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E87847" }}>
+                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-danger)" }}>
                       {inviteError}
                     </div>
                   )}
                   {inviteSuccess && (
-                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#47E86A" }}>
+                    <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-success)" }}>
                       {inviteSuccess}
                     </div>
                   )}
@@ -698,7 +734,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     <div
                       key={m.id}
                       className="px-4 py-3 rounded-lg"
-                      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #222" }}
+                      style={{ background: "var(--stage-line-hover)", border: "1px solid #222" }}
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -707,17 +743,17 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                             fontSize: 12,
                             background: "rgba(232,197,71,0.1)",
                             border: "1px solid #E8C54740",
-                            color: "#E8C547",
+                            color: "var(--stage-gold)",
                             fontFamily: "DM Mono, monospace",
                           }}
                         >
                           {(m.name || "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "#e0ddd5", fontWeight: 600 }}>
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-text)", fontWeight: 600 }}>
                             {m.name}
                           </div>
-                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#666" }}>
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-text)" }}>
                             {m.email}
                           </div>
                         </div>
@@ -725,7 +761,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                           <button
                             onClick={() => handleRemoveMember(m.id, m.name)}
                             className="px-2 py-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
-                            style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E84747", border: "1px solid #E8474730" }}
+                            style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-error)", border: "1px solid #E8474730" }}
                           >
                             Remove
                           </button>
@@ -748,10 +784,10 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                                 className="px-2.5 py-1 rounded transition-all"
                                 style={{
                                   fontFamily: "DM Mono, monospace",
-                                  fontSize: 10,
-                                  color: hasRole ? r.color : "#555",
+                                  fontSize: 13,
+                                  color: hasRole ? r.color : "var(--stage-text)",
                                   background: hasRole ? r.color + "15" : "transparent",
-                                  border: `1px solid ${hasRole ? r.color + "40" : "#333"}`,
+                                  border: `1px solid ${hasRole ? r.color + "40" : "var(--stage-border-subtle)"}`,
                                 }}
                               >
                                 {r.icon} {r.label}
@@ -768,7 +804,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                                 className="px-2.5 py-1 rounded"
                                 style={{
                                   fontFamily: "DM Mono, monospace",
-                                  fontSize: 10,
+                                  fontSize: 13,
                                   color: r.color,
                                   background: r.color + "15",
                                   border: `1px solid ${r.color}40`,
@@ -794,18 +830,18 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                       <div
                         key={inv.id}
                         className="flex items-center gap-3 px-4 py-3 rounded-lg group"
-                        style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed #2a2720" }}
+                        style={{ background: "var(--stage-line-hover)", border: "1px dashed var(--stage-border)" }}
                       >
-                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "#888", flex: 1 }}>
+                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-text)", flex: 1 }}>
                           {inv.email}
                         </div>
-                        <span style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E8C547" }}>
+                        <span style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-gold)" }}>
                           {inv.role.replace(/_/g, " ")}
                         </span>
                         <button
                           onClick={() => handleRevokeInvite(inv.id)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-500/10"
-                          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E84747", border: "1px solid #E8474740" }}
+                          style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-error)", border: "1px solid #E8474740" }}
                         >
                           Revoke
                         </button>
@@ -823,8 +859,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               <p
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 11,
-                  color: "#666",
+                  fontSize: 15,
+                  color: "var(--stage-text)",
                 }}
               >
                 Manage roles for this project.
@@ -836,8 +872,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-2"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 10,
-                    color: "#888",
+                    fontSize: 13,
+                    color: "var(--stage-text)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -845,24 +881,33 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   Built-in Roles
                 </div>
                 <div className="space-y-1.5">
-                  {ROLE_LIST.map((role) => (
+                  {ROLE_LIST.map((role) => {
+                    const lightAlt: Record<string, string> = {
+                      ACTOR: "#3D5A80",
+                      DIRECTOR: "#555555",
+                      LIGHTING: "#8B6B14",
+                      WRITER: "#6B6B1A",
+                      VIEWER: "#666666",
+                    };
+                    const textColor = theme === "light" && lightAlt[role.id] ? lightAlt[role.id] : role.color;
+                    return (
                     <div
                       key={role.id}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg"
                       style={{
-                        background: "rgba(255,255,255,0.02)",
-                        border: "1px solid #222",
+                        background: "var(--stage-line-hover)",
+                        border: "1px solid var(--stage-border)",
                       }}
                     >
-                      <span style={{ fontSize: 16, color: role.color }}>
+                      <span style={{ fontSize: 16, color: textColor }}>
                         {role.icon}
                       </span>
                       <span
                         style={{
                           fontFamily: "DM Mono, monospace",
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: 600,
-                          color: role.color,
+                          color: textColor,
                         }}
                       >
                         {role.label}
@@ -871,9 +916,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         className="ml-auto"
                         style={{
                           fontFamily: "DM Mono, monospace",
-                          fontSize: 9,
-                          color: "#555",
-                          border: "1px solid #333",
+                          fontSize: 11,
+                          color: "var(--stage-text)",
+                          border: "1px solid var(--stage-border-subtle)",
                           borderRadius: 4,
                           padding: "1px 5px",
                         }}
@@ -881,7 +926,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         built-in
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -891,8 +937,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-2"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 10,
-                    color: "#888",
+                    fontSize: 13,
+                    color: "var(--stage-text)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -906,7 +952,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   style={{
                     background: "rgba(232, 120, 71, 0.1)",
                     border: "1px solid rgba(232, 120, 71, 0.3)",
-                    color: "#E87847",
+                    color: "var(--stage-danger)",
                     fontFamily: "DM Mono, monospace",
                     fontSize: 12,
                   }}
@@ -937,8 +983,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         key={role.id}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg group"
                         style={{
-                          background: "rgba(255,255,255,0.02)",
-                          border: "1px solid #2a2720",
+                          background: "var(--stage-line-hover)",
+                          border: "1px solid var(--stage-border)",
                         }}
                       >
                         <span style={{ fontSize: 16, color: role.color }}>
@@ -948,7 +994,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                           className="flex-1"
                           style={{
                             fontFamily: "DM Mono, monospace",
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: 600,
                             color: role.color,
                           }}
@@ -958,21 +1004,23 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEditRole(role)}
-                            className="px-2 py-1 rounded text-[10px] hover:bg-white/5"
+                            className="px-2 py-1 rounded hover:bg-white/5"
                             style={{
                               fontFamily: "DM Mono, monospace",
-                              color: "#888",
-                              border: "1px solid #333",
+                              fontSize: 13,
+                              color: "var(--stage-text)",
+                              border: "1px solid var(--stage-border-subtle)",
                             }}
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteRole(role.id)}
-                            className="px-2 py-1 rounded text-[10px] hover:bg-red-500/10"
+                            className="px-2 py-1 rounded hover:bg-red-500/10"
                             style={{
                               fontFamily: "DM Mono, monospace",
-                              color: "#E84747",
+                              fontSize: 13,
+                              color: "var(--stage-error)",
                               border: "1px solid #E8474740",
                             }}
                           >
@@ -990,8 +1038,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="text-center py-6"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#555",
+                    fontSize: 14,
+                    color: "var(--stage-text)",
                   }}
                 >
                   No custom roles yet
@@ -1018,9 +1066,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="w-full px-4 py-2.5 rounded-lg transition-colors hover:bg-white/3"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#888",
-                    border: "1px dashed #333",
+                    fontSize: 14,
+                    color: "var(--stage-text)",
+                    border: "1px dashed var(--stage-border-subtle)",
                   }}
                 >
                   + Add Custom Role
@@ -1036,8 +1084,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               <p
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 11,
-                  color: "#666",
+                  fontSize: 15,
+                  color: "var(--stage-text)",
                 }}
               >
                 Manage cue types for this project.
@@ -1049,8 +1097,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-2"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 10,
-                    color: "#888",
+                    fontSize: 13,
+                    color: "var(--stage-text)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -1077,7 +1125,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                       <span
                         style={{
                           fontFamily: "DM Mono, monospace",
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: 700,
                           color: ct.color,
                         }}
@@ -1087,8 +1135,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                       <span
                         style={{
                           fontFamily: "DM Mono, monospace",
-                          fontSize: 10,
-                          color: "#666",
+                          fontSize: 12,
+                          color: "var(--stage-text)",
                         }}
                       >
                         ({ct.type})
@@ -1097,9 +1145,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         className="ml-auto"
                         style={{
                           fontFamily: "DM Mono, monospace",
-                          fontSize: 9,
-                          color: "#555",
-                          border: "1px solid #333",
+                          fontSize: 11,
+                          color: "var(--stage-text)",
+                          border: "1px solid var(--stage-border-subtle)",
                           borderRadius: 4,
                           padding: "1px 5px",
                         }}
@@ -1117,8 +1165,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="mb-2"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 10,
-                    color: "#888",
+                    fontSize: 13,
+                    color: "var(--stage-text)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -1132,7 +1180,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   style={{
                     background: "rgba(232, 120, 71, 0.1)",
                     border: "1px solid rgba(232, 120, 71, 0.3)",
-                    color: "#E87847",
+                    color: "var(--stage-danger)",
                     fontFamily: "DM Mono, monospace",
                     fontSize: 12,
                   }}
@@ -1179,7 +1227,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         <span
                           style={{
                             fontFamily: "DM Mono, monospace",
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: 700,
                             color: ct.color,
                           }}
@@ -1190,8 +1238,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                           className="flex-1"
                           style={{
                             fontFamily: "DM Mono, monospace",
-                            fontSize: 10,
-                            color: "#666",
+                            fontSize: 12,
+                            color: "var(--stage-text)",
                           }}
                         >
                           ({ct.type})
@@ -1199,21 +1247,23 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEditCueType(ct)}
-                            className="px-2 py-1 rounded text-[10px] hover:bg-white/5"
+                            className="px-2 py-1 rounded hover:bg-white/5"
                             style={{
                               fontFamily: "DM Mono, monospace",
-                              color: "#888",
-                              border: "1px solid #333",
+                              fontSize: 13,
+                              color: "var(--stage-text)",
+                              border: "1px solid var(--stage-border-subtle)",
                             }}
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteCueType(ct.id)}
-                            className="px-2 py-1 rounded text-[10px] hover:bg-red-500/10"
+                            className="px-2 py-1 rounded hover:bg-red-500/10"
                             style={{
                               fontFamily: "DM Mono, monospace",
-                              color: "#E84747",
+                              fontSize: 13,
+                              color: "var(--stage-error)",
                               border: "1px solid #E8474740",
                             }}
                           >
@@ -1231,8 +1281,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="text-center py-6"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#555",
+                    fontSize: 14,
+                    color: "var(--stage-text)",
                   }}
                 >
                   No custom cue types yet
@@ -1261,9 +1311,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   className="w-full px-4 py-2.5 rounded-lg transition-colors hover:bg-white/3"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: "#888",
-                    border: "1px dashed #333",
+                    fontSize: 14,
+                    color: "var(--stage-text)",
+                    border: "1px dashed var(--stage-border-subtle)",
                   }}
                 >
                   + Add Custom Cue Type
@@ -1276,17 +1326,17 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           {/* ===== EMAIL TAB ===== */}
           {activeTab === "email" && isSM && (
             <div className="space-y-4">
-              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}>
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 15, color: "var(--stage-text)" }}>
                 Configure Gmail SMTP to send invite emails from your own address.
               </p>
 
               <div
                 className="p-4 rounded-lg space-y-3"
-                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
+                style={{ background: "var(--stage-line-hover)", border: "1px solid var(--stage-border)" }}
               >
                 <div style={labelStyle}>Gmail SMTP Setup</div>
 
-                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
+                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-text)", lineHeight: 1.5 }}>
                   Use a Gmail App Password (not your regular password).
                   Go to Google Account → Security → 2-Step Verification → App Passwords to generate one.
                 </p>
@@ -1345,9 +1395,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     className="px-4 py-2 rounded transition-colors"
                     style={{
                       fontFamily: "DM Mono, monospace",
-                      fontSize: 11,
+                      fontSize: 14,
                       fontWeight: 600,
-                      color: "#E8C547",
+                      color: "var(--stage-gold)",
                       background: "#E8C54715",
                       border: "1px solid #E8C54740",
                       opacity: smtpSaving || !smtpUser.trim() ? 0.5 : 1,
@@ -1377,9 +1427,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                     className="px-4 py-2 rounded transition-colors hover:bg-white/5"
                     style={{
                       fontFamily: "DM Mono, monospace",
-                      fontSize: 11,
-                      color: "#888",
-                      border: "1px solid #333",
+                      fontSize: 14,
+                      color: "var(--stage-text)",
+                      border: "1px solid var(--stage-border-subtle)",
                     }}
                   >
                     Clear
@@ -1389,8 +1439,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                 {smtpStatus && (
                   <div style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 11,
-                    color: smtpStatus.includes("success") || smtpStatus.includes("cleared") ? "#47E86A" : "#E87847",
+                    fontSize: 14,
+                    color: smtpStatus.includes("success") || smtpStatus.includes("cleared") ? "var(--stage-success)" : "var(--stage-danger)",
                   }}>
                     {smtpStatus}
                   </div>
@@ -1401,7 +1451,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                 className="p-3 rounded-lg"
                 style={{ background: "rgba(71,184,232,0.05)", border: "1px solid rgba(71,184,232,0.15)" }}
               >
-                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#47B8E8", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 13, color: "var(--stage-info)", lineHeight: 1.6 }}>
                   If no SMTP is configured here, the system will use the default server settings.
                   Per-project SMTP lets invites come from your own email address.
                 </p>
@@ -1413,15 +1463,15 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
         {/* Footer */}
         <div
           className="flex items-center justify-between px-6 py-3 flex-shrink-0"
-          style={{ borderTop: "1px solid #2a2720" }}
+          style={{ borderTop: "1px solid var(--stage-border)" }}
         >
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             className="px-4 py-2 rounded transition-colors hover:bg-red-500/10"
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: 12,
-              color: "#E87847",
+              fontSize: 14,
+              color: "var(--stage-danger)",
               border: "1px solid rgba(232, 120, 71, 0.3)",
             }}
           >
@@ -1432,9 +1482,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
             className="px-4 py-2 rounded transition-colors hover:bg-white/5"
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: 12,
-              color: "#888",
-              border: "1px solid #333",
+              fontSize: 14,
+              color: "var(--stage-text)",
+              border: "1px solid var(--stage-border-subtle)",
             }}
           >
             Close
@@ -1463,8 +1513,8 @@ function RoleEditForm({
     <div
       className="space-y-3 p-4 rounded-lg"
       style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid #2a2720",
+        background: "var(--stage-line-hover)",
+        border: "1px solid var(--stage-border)",
       }}
     >
       <div>
@@ -1489,9 +1539,9 @@ function RoleEditForm({
               className="w-8 h-8 rounded flex items-center justify-center transition-all"
               style={{
                 fontSize: 14,
-                color: icon === ic ? color : "#666",
+                color: icon === ic ? color : "var(--stage-dim)",
                 background: icon === ic ? color + "15" : "transparent",
-                border: `1px solid ${icon === ic ? color + "40" : "#333"}`,
+                border: `1px solid ${icon === ic ? color + "40" : "var(--stage-border-subtle)"}`,
               }}
             >
               {ic}
@@ -1524,9 +1574,9 @@ function RoleEditForm({
           className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 11,
-            color: "#888",
-            border: "1px solid #333",
+            fontSize: 14,
+            color: "var(--stage-text)",
+            border: "1px solid var(--stage-border-subtle)",
           }}
         >
           Cancel
@@ -1537,9 +1587,9 @@ function RoleEditForm({
           className="px-3 py-1.5 rounded transition-colors"
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 600,
-            color: "#E8C547",
+            color: "var(--stage-gold)",
             background: "#E8C54715",
             border: "1px solid #E8C54740",
             opacity: saving || !name.trim() ? 0.5 : 1,
@@ -1569,8 +1619,8 @@ function CueTypeEditForm({
     <div
       className="space-y-3 p-4 rounded-lg"
       style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid #2a2720",
+        background: "var(--stage-line-hover)",
+        border: "1px solid var(--stage-border)",
       }}
     >
       <div className="flex gap-3">
@@ -1634,9 +1684,9 @@ function CueTypeEditForm({
           className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 11,
-            color: "#888",
-            border: "1px solid #333",
+            fontSize: 14,
+            color: "var(--stage-text)",
+            border: "1px solid var(--stage-border-subtle)",
           }}
         >
           Cancel
@@ -1647,9 +1697,9 @@ function CueTypeEditForm({
           className="px-3 py-1.5 rounded transition-colors"
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 600,
-            color: "#E8C547",
+            color: "var(--stage-gold)",
             background: "#E8C54715",
             border: "1px solid #E8C54740",
             opacity: saving || !label.trim() || !typeKey.trim() ? 0.5 : 1,

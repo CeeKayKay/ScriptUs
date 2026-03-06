@@ -60,11 +60,11 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
         <div className="text-center max-w-md">
           <h1
             className="text-3xl font-bold mb-4"
-            style={{ fontFamily: "Playfair Display, serif", color: "#E8C547" }}
+            style={{ fontFamily: "Playfair Display, serif", color: "var(--stage-gold)" }}
           >
             ◆ SCRIPTUS
           </h1>
-          <p style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "#E87847" }}>
+          <p style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-danger)" }}>
             {error}
           </p>
           <button
@@ -73,9 +73,9 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 13,
-              background: "#1a1916",
-              border: "1px solid #2a2720",
-              color: "#888",
+              background: "var(--stage-surface)",
+              border: "1px solid var(--stage-border)",
+              color: "var(--stage-muted)",
             }}
           >
             Go Home
@@ -88,7 +88,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
   if (!invite) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse-dot text-2xl" style={{ color: "#E8C547" }}>◆</div>
+        <div className="animate-pulse-dot text-2xl" style={{ color: "var(--stage-gold)" }}>◆</div>
       </div>
     );
   }
@@ -100,35 +100,35 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
       <div className="text-center max-w-md">
         <h1
           className="text-3xl font-bold mb-2"
-          style={{ fontFamily: "Playfair Display, serif", color: "#E8C547" }}
+          style={{ fontFamily: "Playfair Display, serif", color: "var(--stage-gold)" }}
         >
           ◆ SCRIPTUS
         </h1>
         <p
           className="mb-8"
-          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}
+          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-dim)" }}
         >
           You&apos;ve been invited
         </p>
 
         <div
           className="p-6 rounded-xl mb-6"
-          style={{ background: "#1a1916", border: "1px solid #2a2720" }}
+          style={{ background: "var(--stage-surface)", border: "1px solid var(--stage-border)" }}
         >
           <p
             className="text-xl mb-2"
-            style={{ fontFamily: "Playfair Display, serif", color: "#e0ddd5" }}
+            style={{ fontFamily: "Playfair Display, serif", color: "var(--stage-text)" }}
           >
             {invite.projectTitle}
           </p>
           <p
-            style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#888" }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "var(--stage-muted)" }}
           >
-            Role: <span style={{ color: "#47B8E8", fontWeight: 700 }}>{roleLabel}</span>
+            Role: <span style={{ color: "var(--stage-info)", fontWeight: 700 }}>{roleLabel}</span>
           </p>
           <p
             className="mt-2"
-            style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-dim)" }}
           >
             Invited by {invite.inviterName}
           </p>
@@ -137,9 +137,9 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
         {status === "unauthenticated" ? (
           <div
             className="p-5 rounded-xl space-y-3 text-left"
-            style={{ background: "#1a1916", border: "1px solid #2a2720" }}
+            style={{ background: "var(--stage-surface)", border: "1px solid var(--stage-border)" }}
           >
-            <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #2a2720" }}>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--stage-border)" }}>
               <button
                 onClick={() => { setIsSignUp(false); setAuthError(""); }}
                 className="flex-1 py-2 text-center transition-colors"
@@ -147,7 +147,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                   fontFamily: "DM Mono, monospace",
                   fontSize: 11,
                   background: !isSignUp ? "#E8C54715" : "transparent",
-                  color: !isSignUp ? "#E8C547" : "#666",
+                  color: !isSignUp ? "var(--stage-gold)" : "var(--stage-dim)",
                 }}
               >
                 Sign In
@@ -159,8 +159,8 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                   fontFamily: "DM Mono, monospace",
                   fontSize: 11,
                   background: isSignUp ? "#E8C54715" : "transparent",
-                  color: isSignUp ? "#E8C547" : "#666",
-                  borderLeft: "1px solid #2a2720",
+                  color: isSignUp ? "var(--stage-gold)" : "var(--stage-dim)",
+                  borderLeft: "1px solid var(--stage-border)",
                 }}
               >
                 Create Account
@@ -168,13 +168,13 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
             </div>
 
             {authError && (
-              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E84747" }}>
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "var(--stage-error)" }}>
                 {authError}
               </p>
             )}
 
             <div>
-              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "var(--stage-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Email
               </label>
               <input
@@ -183,13 +183,13 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 className="w-full px-4 py-2.5 rounded-lg outline-none"
-                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)" }}
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "var(--stage-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Password
               </label>
               <input
@@ -198,13 +198,13 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={isSignUp ? "Create a password" : "Enter your password"}
                 className="w-full px-4 py-2.5 rounded-lg outline-none"
-                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)" }}
               />
             </div>
 
             {isSignUp && (
               <div>
-                <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "var(--stage-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                   Name
                 </label>
                 <input
@@ -213,7 +213,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
                   className="w-full px-4 py-2.5 rounded-lg outline-none"
-                  style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+                  style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)" }}
                 />
               </div>
             )}
@@ -245,7 +245,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                 fontWeight: 600,
                 background: "#E8C54715",
                 border: "1px solid #E8C54740",
-                color: "#E8C547",
+                color: "var(--stage-gold)",
                 opacity: authSubmitting || !email.trim() || !password ? 0.5 : 1,
               }}
             >
@@ -262,7 +262,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
               fontSize: 13,
               background: "#E8C54715",
               border: "1px solid #E8C54740",
-              color: "#E8C547",
+              color: "var(--stage-gold)",
               opacity: accepting ? 0.5 : 1,
             }}
           >

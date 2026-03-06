@@ -32,7 +32,7 @@ export async function POST(
   }
 
   const body = await req.json();
-  const { act, scene: sceneNum, title } = body;
+  const { act, scene: sceneNum, title, position } = body;
 
   if (!act || !sceneNum || !title) {
     return NextResponse.json(
@@ -41,11 +41,31 @@ export async function POST(
     );
   }
 
-  // Get the next sort order
-  const lastScene = await prisma.scene.findFirst({
-    where: { projectId },
-    orderBy: { sortOrder: "desc" },
-  });
+  let sortOrder: number;
+
+  if (position === "start") {
+    // Insert before all existing scenes — shift existing sortOrders up
+    const firstScene = await prisma.scene.findFirst({
+      where: { projectId },
+      orderBy: { sortOrder: "asc" },
+    });
+    if (firstScene) {
+      await prisma.scene.updateMany({
+        where: { projectId },
+        data: { sortOrder: { increment: 1 } },
+      });
+      sortOrder = firstScene.sortOrder;
+    } else {
+      sortOrder = 0;
+    }
+  } else {
+    // Append after all existing scenes
+    const lastScene = await prisma.scene.findFirst({
+      where: { projectId },
+      orderBy: { sortOrder: "desc" },
+    });
+    sortOrder = (lastScene?.sortOrder ?? -1) + 1;
+  }
 
   try {
     const newScene = await prisma.scene.create({
@@ -54,7 +74,7 @@ export async function POST(
         act: Number(act),
         scene: Number(sceneNum),
         title: title.trim(),
-        sortOrder: (lastScene?.sortOrder ?? -1) + 1,
+        sortOrder,
       },
       include: {
         scriptLines: {

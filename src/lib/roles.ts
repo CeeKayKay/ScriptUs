@@ -79,7 +79,7 @@ export const ROLES: Record<ProjectRole, RoleConfig> = {
     visibleCueTypes: [],
     showAllDialogue: true,
     showStageDirections: true,
-    hasCuePanel: false,
+    hasCuePanel: true,
   },
   VIEWER: {
     id: "VIEWER",

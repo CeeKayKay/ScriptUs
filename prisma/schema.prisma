@@ -94,6 +94,9 @@ model Project {
   invites        Invite[]
   customRoles    CustomRole[]
   customCueTypes CustomCueType[]
+  characterGroups CharacterGroup[]
+  characters     Character[]
+  locations      Location[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,6 +154,7 @@ enum LineType {
   SCENE_HEADER
   SONG
   TRANSITION
+  LOCATION
 }
 
 model ScriptLine {
@@ -260,6 +264,47 @@ model CustomCueType {
 
   @@unique([projectId, type])
   @@index([projectId])
+}
+
+// ---- Writer: Characters & Locations ----
+
+model CharacterGroup {
+  id        String @id @default(cuid())
+  projectId String
+  name      String
+  sortOrder Int    @default(0)
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  characters Character[]
+
+  @@unique([projectId, name])
+  @@index([projectId, sortOrder])
+}
+
+model Character {
+  id        String  @id @default(cuid())
+  projectId String
+  groupId   String?
+  name      String
+  sortOrder Int     @default(0)
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group   CharacterGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, name])
+  @@index([projectId, sortOrder])
+}
+
+model Location {
+  id        String @id @default(cuid())
+  projectId String
+  name      String
+  sortOrder Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId, sortOrder])
 }
 
 // ---- Comments / Notes ----

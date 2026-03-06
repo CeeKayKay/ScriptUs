@@ -21,8 +21,8 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
       <div
         className="flex items-center gap-1 overflow-x-auto"
         style={{
-          background: "#16150f",
-          borderBottom: "1px solid rgba(255,255,255,0.03)",
+          background: "var(--stage-viewas-bg)",
+          borderBottom: "1px solid var(--stage-hover)",
           padding: isMobile ? "6px 8px" : "8px 20px",
           WebkitOverflowScrolling: "touch",
         }}
@@ -33,7 +33,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 18,
-              color: "#555",
+              color: "var(--stage-viewas-label)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
@@ -53,7 +53,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
                 fontFamily: "DM Mono, monospace",
                 fontSize: isMobile ? 12 : 22,
                 fontWeight: isActive ? 700 : 400,
-                color: isActive ? role.color : "#777",
+                color: isActive ? role.color : "#ffffff",
                 background: isActive ? role.color + "12" : "transparent",
                 border: isActive
                   ? `1px solid ${role.color}40`
@@ -70,8 +70,8 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
                 <span
                   className="text-[8px] px-1 py-0.5 rounded"
                   style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: "#888",
+                    background: "var(--stage-hover-strong)",
+                    color: "var(--stage-muted)",
                   }}
                 >
                   YOU
@@ -86,8 +86,8 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
       <div
         className="flex items-center gap-2 overflow-x-auto"
         style={{
-          background: "#13120f",
-          borderBottom: "1px solid rgba(255,255,255,0.02)",
+          background: "var(--stage-bg)",
+          borderBottom: "1px solid var(--stage-line-hover)",
           padding: isMobile ? "4px 8px" : "6px 20px",
           WebkitOverflowScrolling: "touch",
         }}
@@ -97,7 +97,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 18,
-              color: "#444",
+              color: "var(--stage-showing-label)",
               letterSpacing: "0.08em",
             }}
           >
@@ -137,10 +137,10 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: isMobile ? 11 : 20,
-              color: "#444",
+              color: "var(--stage-showing-label)",
             }}
           >
-            Script only
+            Script Editing Mode
           </span>
         )}
       </div>

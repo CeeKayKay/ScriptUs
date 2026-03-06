@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["unpdf", "pdfjs-dist"],
   turbopack: {},
   webpack: (config) => {
     // Needed for Yjs

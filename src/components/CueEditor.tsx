@@ -211,14 +211,14 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.7)" }}
+      style={{ background: "var(--stage-overlay)" }}
     >
       <div
         className="w-full animate-fade-in"
         style={{
-          background: "#1a1916",
-          border: isMobile ? "none" : "1px solid #2a2720",
-          boxShadow: isMobile ? "none" : "0 25px 50px rgba(0,0,0,0.5)",
+          background: "var(--stage-surface)",
+          border: isMobile ? "none" : "1px solid var(--stage-border)",
+          boxShadow: isMobile ? "none" : "0 25px 50px var(--stage-overlay)",
           borderRadius: isMobile ? 0 : 12,
           maxWidth: isMobile ? "100%" : "42rem",
           maxHeight: isMobile ? "100%" : "90vh",
@@ -231,7 +231,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         {/* Header */}
         <div
           className="flex items-center justify-between flex-shrink-0"
-          style={{ borderBottom: "1px solid #2a2720", padding: isMobile ? "12px" : "16px 24px" }}
+          style={{ borderBottom: "1px solid var(--stage-border)", padding: isMobile ? "12px" : "16px 24px" }}
         >
           <h2
             style={{
@@ -245,7 +245,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
           <button
             onClick={closeCueEditor}
             className="px-3 py-2 rounded hover:bg-white/5"
-            style={{ fontFamily: "DM Mono, monospace", fontSize: 24, color: "#888" }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: 24, color: "var(--stage-muted)" }}
           >
             ✕
           </button>
@@ -259,7 +259,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               style={{
                 background: "rgba(232, 120, 71, 0.1)",
                 border: "1px solid rgba(232, 120, 71, 0.3)",
-                color: "#E87847",
+                color: "var(--stage-danger)",
                 fontFamily: "DM Mono, monospace",
                 fontSize: 24,
               }}
@@ -276,7 +276,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: isMobile ? 10 : 20,
-                    color: "#888",
+                    color: "var(--stage-muted)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -290,8 +290,8 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 10,
-                      color: "#888",
-                      border: "1px solid #333",
+                      color: "var(--stage-muted)",
+                      border: "1px solid var(--stage-border-subtle)",
                     }}
                   >
                     Clear
@@ -306,7 +306,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 9,
-                      color: "#555",
+                      color: "var(--stage-faint)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       marginBottom: 4,
@@ -321,8 +321,8 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                       fontSize: isMobile ? 14 : 16,
                       lineHeight: 1.6,
                       color: "#a09888",
-                      background: "rgba(255,255,255,0.02)",
-                      border: "1px solid #2a2720",
+                      background: "var(--stage-line-hover)",
+                      border: "1px solid var(--stage-border)",
                       whiteSpace: "pre-wrap",
                       cursor: "text",
                       userSelect: "text",
@@ -344,9 +344,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                           <>
                             {lineText.slice(0, idx)}
                             <span style={{
-                              background: `${CUE_TYPES[type]?.color || "#E8C547"}20`,
-                              borderBottom: `2px solid ${CUE_TYPES[type]?.color || "#E8C547"}`,
-                              color: CUE_TYPES[type]?.color || "#E8C547",
+                              background: `${CUE_TYPES[type]?.color || "var(--stage-gold)"}20`,
+                              borderBottom: `2px solid ${CUE_TYPES[type]?.color || "var(--stage-gold)"}`,
+                              color: CUE_TYPES[type]?.color || "var(--stage-gold)",
                               borderRadius: 2,
                               padding: "1px 0",
                             }}>
@@ -376,8 +376,8 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                   lineHeight: 1.6,
                   background: "rgba(232, 197, 71, 0.04)",
                   border: "1px solid rgba(232, 197, 71, 0.15)",
-                  borderLeft: `3px solid ${CUE_TYPES[type]?.color || "#E8C547"}80`,
-                  color: "#e0ddd5",
+                  borderLeft: `3px solid ${CUE_TYPES[type]?.color || "var(--stage-gold)"}80`,
+                  color: "var(--stage-text)",
                   outline: "none",
                 }}
               />
@@ -391,7 +391,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 20,
-                color: "#888",
+                color: "var(--stage-muted)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
@@ -414,11 +414,11 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                     fontFamily: "DM Mono, monospace",
                     fontSize: 22,
                     fontWeight: type === ct.type ? 700 : 400,
-                    color: type === ct.type ? ct.color : "#666",
+                    color: type === ct.type ? ct.color : "var(--stage-dim)",
                     background:
                       type === ct.type ? ct.color + "15" : "transparent",
                     border: `1px solid ${
-                      type === ct.type ? ct.color + "40" : "#333"
+                      type === ct.type ? ct.color + "40" : "var(--stage-border-subtle)"
                     }`,
                   }}
                 >
@@ -436,7 +436,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 10,
-                  color: "#888",
+                  color: "var(--stage-muted)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
@@ -451,9 +451,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 26,
-                  background: "#13120f",
-                  border: "1px solid #2a2720",
-                  color: "#e0ddd5",
+                  background: "var(--stage-bg)",
+                  border: "1px solid var(--stage-border)",
+                  color: "var(--stage-text)",
                   outline: "none",
                 }}
               />
@@ -464,7 +464,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 10,
-                  color: "#888",
+                  color: "var(--stage-muted)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
@@ -481,9 +481,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 26,
-                  background: "#13120f",
-                  border: "1px solid #2a2720",
-                  color: "#e0ddd5",
+                  background: "var(--stage-bg)",
+                  border: "1px solid var(--stage-border)",
+                  color: "var(--stage-text)",
                   outline: "none",
                 }}
               />
@@ -497,7 +497,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 20,
-                color: "#888",
+                color: "var(--stage-muted)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
@@ -514,9 +514,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 fontFamily: "DM Mono, monospace",
                 fontSize: 24,
                 lineHeight: 1.6,
-                background: "#13120f",
-                border: "1px solid #2a2720",
-                color: "#e0ddd5",
+                background: "var(--stage-bg)",
+                border: "1px solid var(--stage-border)",
+                color: "var(--stage-text)",
                 outline: "none",
               }}
             />
@@ -530,7 +530,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 10,
-                  color: "#888",
+                  color: "var(--stage-muted)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
@@ -547,9 +547,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 26,
-                  background: "#13120f",
-                  border: "1px solid #2a2720",
-                  color: "#e0ddd5",
+                  background: "var(--stage-bg)",
+                  border: "1px solid var(--stage-border)",
+                  color: "var(--stage-text)",
                   outline: "none",
                 }}
               />
@@ -560,7 +560,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 10,
-                  color: "#888",
+                  color: "var(--stage-muted)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
@@ -577,9 +577,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 26,
-                  background: "#13120f",
-                  border: "1px solid #2a2720",
-                  color: "#e0ddd5",
+                  background: "var(--stage-bg)",
+                  border: "1px solid var(--stage-border)",
+                  color: "var(--stage-text)",
                   outline: "none",
                 }}
               />
@@ -593,7 +593,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 20,
-                color: "#888",
+                color: "var(--stage-muted)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
@@ -604,10 +604,10 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               {(["DRAFT", "REVIEW", "APPROVED", "LOCKED"] as CueStatus[]).map(
                 (s) => {
                   const colors: Record<CueStatus, string> = {
-                    DRAFT: "#E87847",
-                    REVIEW: "#E8C547",
-                    APPROVED: "#47E86A",
-                    LOCKED: "#888",
+                    DRAFT: "var(--stage-danger)",
+                    REVIEW: "var(--stage-gold)",
+                    APPROVED: "var(--stage-success)",
+                    LOCKED: "var(--stage-muted)",
                   };
                   return (
                     <button
@@ -618,11 +618,11 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                         fontFamily: "DM Mono, monospace",
                         fontSize: 20,
                         fontWeight: status === s ? 700 : 400,
-                        color: status === s ? colors[s] : "#666",
+                        color: status === s ? colors[s] : "var(--stage-dim)",
                         background:
                           status === s ? colors[s] + "15" : "transparent",
                         border: `1px solid ${
-                          status === s ? colors[s] + "40" : "#333"
+                          status === s ? colors[s] + "40" : "var(--stage-border-subtle)"
                         }`,
                       }}
                     >
@@ -638,7 +638,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         {/* Footer actions */}
         <div
           className="flex items-center justify-between flex-shrink-0"
-          style={{ borderTop: "1px solid #2a2720", padding: isMobile ? "12px" : "16px 24px" }}
+          style={{ borderTop: "1px solid var(--stage-border)", padding: isMobile ? "12px" : "16px 24px" }}
         >
           <div>
             {isEditing && (
@@ -648,7 +648,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 22,
-                  color: "#E87847",
+                  color: "var(--stage-danger)",
                   border: "1px solid rgba(232, 120, 71, 0.3)",
                 }}
               >
@@ -663,8 +663,8 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 24,
-                color: "#888",
-                border: "1px solid #333",
+                color: "var(--stage-muted)",
+                border: "1px solid var(--stage-border-subtle)",
               }}
             >
               Cancel
@@ -677,7 +677,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 fontFamily: "DM Mono, monospace",
                 fontSize: 24,
                 fontWeight: 600,
-                color: "#E8C547",
+                color: "var(--stage-gold)",
                 background: "#E8C54715",
                 border: "1px solid #E8C54740",
                 opacity: saving || !label ? 0.5 : 1,

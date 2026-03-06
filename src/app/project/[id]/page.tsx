@@ -10,6 +10,7 @@ import { Header } from "@/components/Header";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { ScriptView } from "@/components/ScriptView";
 import { CueSidePanel } from "@/components/CueSidePanel";
+import { WriterSidePanel } from "@/components/WriterSidePanel";
 import { CueEditor } from "@/components/CueEditor";
 import { Settings } from "@/components/Settings";
 import { ROLES } from "@/lib/roles";
@@ -93,7 +94,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
         <div className="text-center">
           <div
             className="text-3xl mb-3 animate-pulse-dot"
-            style={{ color: "#E8C547" }}
+            style={{ color: "var(--stage-gold)" }}
           >
             ◆
           </div>
@@ -101,7 +102,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 12,
-              color: "#666",
+              color: "var(--stage-dim)",
             }}
           >
             Loading production...
@@ -115,7 +116,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p style={{ color: "#E87847", fontFamily: "DM Mono, monospace" }}>
+          <p style={{ color: "var(--stage-danger)", fontFamily: "DM Mono, monospace" }}>
             {error}
           </p>
         </div>
@@ -125,6 +126,8 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
   const roleConfig = ROLES[activeRole];
   const showSidePanel = roleConfig.hasCuePanel && isCuePanelOpen;
+  const isWriter = activeRole === "WRITER";
+  const SidePanel = isWriter ? WriterSidePanel : CueSidePanel;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -140,17 +143,17 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Cue side panel on left (desktop only for side layout) */}
-        {showSidePanel && cuePanelSide === "left" && !isMobile && <CueSidePanel />}
+        {showSidePanel && cuePanelSide === "left" && !isMobile && <SidePanel />}
 
         {/* Script panel */}
         <ScriptView broadcast={broadcast} projectId={params.id} />
 
         {/* Cue side panel on right (desktop only for side layout) */}
-        {showSidePanel && cuePanelSide === "right" && !isMobile && <CueSidePanel />}
+        {showSidePanel && cuePanelSide === "right" && !isMobile && <SidePanel />}
       </div>
 
       {/* Mobile: Cue panel overlay */}
-      {isMobile && showSidePanel && <CueSidePanel />}
+      {isMobile && showSidePanel && <SidePanel />}
 
       {/* Floating cue panel toggle (shown when panel is closed) */}
       {roleConfig.hasCuePanel && !showSidePanel && (
@@ -172,14 +175,16 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+            boxShadow: "0 4px 16px var(--stage-overlay)",
             padding: isMobile ? undefined : "0 14px",
             width: isMobile ? 48 : "auto",
             gap: 6,
           }}
-          title="Open Cue Sheet"
+          title={isWriter ? "Open Characters & Settings" : "Open " + (activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
         >
-          {roleConfig.icon} {isMobile ? "CUE" : "Cue Sheet"}
+          {roleConfig.icon} {isMobile
+            ? (isWriter ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
+            : (isWriter ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
         </button>
       )}
 
@@ -194,25 +199,25 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
         <div
           className="flex items-center justify-between px-5 py-1.5 flex-shrink-0"
           style={{
-            background: "#1a1916",
-            borderTop: "1px solid rgba(255,255,255,0.03)",
+            background: "var(--stage-surface)",
+            borderTop: "1px solid var(--stage-hover)",
             fontFamily: "DM Mono, monospace",
             fontSize: 10,
           }}
         >
-          <div className="flex gap-4" style={{ color: "#555" }}>
+          <div className="flex gap-4" style={{ color: "var(--stage-faint)" }}>
             <span>
               {roleConfig.icon} {roleConfig.label} View
             </span>
             <span>
               {yjs.connected ? (
-                <span style={{ color: "#47E86A" }}>● Connected</span>
+                <span style={{ color: "var(--stage-success)" }}>● Connected</span>
               ) : (
-                <span style={{ color: "#E87847" }}>● Disconnected</span>
+                <span style={{ color: "var(--stage-danger)" }}>● Disconnected</span>
               )}
             </span>
           </div>
-          <div style={{ color: "#444" }}>
+          <div style={{ color: "var(--stage-ultra-faint)" }}>
             {yjs.onlineUsers.length} collaborator
             {yjs.onlineUsers.length !== 1 ? "s" : ""} online
           </div>

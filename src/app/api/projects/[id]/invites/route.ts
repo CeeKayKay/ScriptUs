@@ -214,6 +214,13 @@ export async function PATCH(
 
   // Update member roles
   if (body.memberId && body.roles) {
+    // Verify target member belongs to this project
+    const target = await prisma.projectMember.findUnique({
+      where: { id: body.memberId },
+    });
+    if (!target || target.projectId !== projectId) {
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
     await prisma.projectMember.update({
       where: { id: body.memberId },
       data: { roles: body.roles },

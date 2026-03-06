@@ -252,7 +252,7 @@ function CommentThread({
           className="group/comment"
           style={{
             padding: "4px 0",
-            borderBottom: "1px solid rgba(255,255,255,0.03)",
+            borderBottom: "1px solid var(--stage-hover)",
           }}
         >
           <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ function CommentThread({
                 fontFamily: "DM Mono, monospace",
                 fontSize: 10,
                 fontWeight: 700,
-                color: "#47B8E8",
+                color: "var(--stage-info)",
               }}
             >
               {c.user.name}
@@ -271,9 +271,9 @@ function CommentThread({
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 9,
-                  color: "#666",
+                  color: "var(--stage-dim)",
                   padding: "0 4px",
-                  border: "1px solid #333",
+                  border: "1px solid var(--stage-border-subtle)",
                   borderRadius: 3,
                 }}
               >
@@ -285,7 +285,7 @@ function CommentThread({
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 9,
-                  color: "#888",
+                  color: "var(--stage-muted)",
                   fontStyle: "italic",
                 }}
               >
@@ -299,7 +299,7 @@ function CommentThread({
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: 9,
-                    color: "#47E86A",
+                    color: "var(--stage-success)",
                     border: "1px solid rgba(71, 232, 106, 0.3)",
                     borderRadius: 3,
                     padding: "1px 6px",
@@ -315,7 +315,7 @@ function CommentThread({
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: 9,
-                    color: "#E84747",
+                    color: "var(--stage-error)",
                     border: "1px solid rgba(232, 71, 71, 0.3)",
                     borderRadius: 3,
                     padding: "1px 6px",
@@ -331,7 +331,7 @@ function CommentThread({
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 11,
-              color: "#c8c0b0",
+              color: "var(--stage-heading)",
               lineHeight: 1.5,
               marginTop: 2,
             }}
@@ -346,7 +346,7 @@ function CommentThread({
           style={{
             fontFamily: "DM Mono, monospace",
             fontSize: 10,
-            color: "#47B8E8",
+            color: "var(--stage-info)",
             cursor: "pointer",
             padding: "2px 0",
             background: "none",
@@ -403,7 +403,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             fontSize: 28,
             fontWeight: 700,
             letterSpacing: "0.15em",
-            color: "#E8C547",
+            color: "var(--stage-gold)",
             borderBottom: "1px solid rgba(232, 197, 71, 0.18)",
             marginBottom: 16,
           }}
@@ -429,9 +429,9 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             fontFamily: "Playfair Display, serif",
             fontSize: Math.round(scriptTextSize * 1.15),
             fontWeight: 600,
-            color: "#FFFFFF",
+            color: "var(--stage-text)",
             letterSpacing: "0.08em",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid var(--stage-hover-strong)",
             marginBottom: 12,
             position: "relative",
           }}
@@ -467,13 +467,110 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
               className="ml-3 opacity-0 group-hover/scene:opacity-100 transition-opacity align-middle px-1.5 py-0.5 rounded text-[10px] hover:bg-red-500/10"
               style={{
                 fontFamily: "DM Mono, monospace",
-                color: "#E84747",
+                color: "var(--stage-error)",
                 border: "1px solid #E8474740",
               }}
             >
               Delete
             </button>
           )}
+        </div>
+      );
+    }
+
+    // --- Location ---
+    if (line.type === "LOCATION") {
+      return (
+        <div
+          ref={ref}
+          data-line-id={line.id}
+          className="script-line group"
+          style={{
+            padding: "10px 16px",
+            margin: "8px 0",
+            background: "rgba(232, 232, 71, 0.04)",
+            borderLeft: "3px solid #E8E84740",
+            borderRadius: 4,
+          }}
+        >
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <div
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: Math.round(scriptTextSize * 0.45),
+                  color: "#E8E847",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 2,
+                }}
+              >
+                LOCATION
+              </div>
+              {canEdit ? (
+                <EditableCuedText
+                  text={line.text}
+                  cues={relevantCues}
+                  activeCueId={activeCueId}
+                  onCueClick={onCueClick}
+                  tag="div"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: scriptTextSize,
+                    color: "var(--stage-text)",
+                    fontWeight: 600,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    outline: "none",
+                  }}
+                  focusStyle={{ background: "var(--stage-hover)" }}
+                  multiline={false}
+                  activeRole={activeRole}
+                  lineId={line.id}
+                  onAddCue={onAddCue}
+                  onAddComment={onAddComment}
+                  showAddButton={showAddButton}
+                  onSave={(newText) => {
+                    if (newText.trim() && newText !== line.text) {
+                      onEditLine?.(line.id, { text: newText.trim() });
+                    }
+                  }}
+                  onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
+                />
+              ) : (
+                <CuedText
+                  text={line.text}
+                  cues={relevantCues}
+                  activeCueId={activeCueId}
+                  onCueClick={onCueClick}
+                  tag="div"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: scriptTextSize,
+                    color: "var(--stage-text)",
+                    fontWeight: 600,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                  }}
+                />
+              )}
+            </div>
+            {canEdit && (
+              <button
+                onClick={() => {
+                  if (confirm("Delete this line?")) onDeleteLine?.(line.id);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1 px-1.5 py-0.5 rounded text-[10px] hover:bg-red-500/10"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  color: "var(--stage-error)",
+                  border: "1px solid #E8474740",
+                }}
+              >
+                Del
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -489,9 +586,9 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             padding: "8px 16px",
             paddingTop: relevantCues.some((c) => c.scriptRef) ? 28 : 8,
             margin: "5px 0",
-            background: hasActiveCue ? "rgba(255,255,255,0.03)" : undefined,
+            background: hasActiveCue ? "var(--stage-hover)" : undefined,
             borderLeft: hasActiveCue
-              ? `2px solid ${activeCueConfig?.color || "#555"}`
+              ? `2px solid ${activeCueConfig?.color || "var(--stage-faint)"}`
               : "2px solid transparent",
             borderRadius: 4,
             transition: "all 0.3s ease",
@@ -509,13 +606,13 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: scriptTextSize,
-                    color: "#FFFFFF",
+                    color: "var(--stage-text)",
                     fontStyle: "italic",
                     lineHeight: 1.7,
                     whiteSpace: "pre-wrap",
                     outline: "none",
                   }}
-                  focusStyle={{ background: "rgba(255,255,255,0.03)" }}
+                  focusStyle={{ background: "var(--stage-hover)" }}
                   multiline
                   activeRole={activeRole}
                   lineId={line.id}
@@ -539,7 +636,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   style={{
                     fontFamily: "DM Mono, monospace",
                     fontSize: scriptTextSize,
-                    color: "#FFFFFF",
+                    color: "var(--stage-text)",
                     fontStyle: "italic",
                     lineHeight: 1.7,
                     whiteSpace: "pre-wrap",
@@ -560,7 +657,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                 className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1 px-1.5 py-0.5 rounded text-[10px] hover:bg-red-500/10"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  color: "#E84747",
+                  color: "var(--stage-error)",
                   border: "1px solid #E8474740",
                 }}
               >
@@ -594,9 +691,9 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             padding: isMobile ? "4px 8px" : "3px 0 3px 16px",
             paddingTop: relevantCues.some((c) => c.scriptRef) ? 24 : (isMobile ? 4 : 3),
             margin: "2px 0",
-            background: hasActiveCue ? "rgba(255,255,255,0.03)" : undefined,
+            background: hasActiveCue ? "var(--stage-hover)" : undefined,
             borderLeft: hasActiveCue
-              ? `2px solid ${activeCueConfig?.color || "#555"}`
+              ? `2px solid ${activeCueConfig?.color || "var(--stage-faint)"}`
               : "2px solid transparent",
             borderRadius: 4,
             transition: "all 0.3s ease",
@@ -620,7 +717,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   fontFamily: "DM Mono, monospace",
                   fontSize: scriptTextSize,
                   fontWeight: 700,
-                  color: "#E8C547",
+                  color: "var(--stage-gold)",
                   letterSpacing: "0.05em",
                   textAlign: isMobile ? "left" : "right",
                   outline: "none",
@@ -640,7 +737,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   fontFamily: "DM Mono, monospace",
                   fontSize: scriptTextSize,
                   fontWeight: 700,
-                  color: "#E8C547",
+                  color: "var(--stage-gold)",
                   letterSpacing: "0.05em",
                 }}
               >
@@ -663,12 +760,12 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     style={{
                       fontFamily: "Libre Baskerville, serif",
                       fontSize: scriptTextSize,
-                      color: "#ffffff",
+                      color: "var(--stage-text)",
                       lineHeight: 1.75,
                       whiteSpace: "pre-wrap",
                       outline: "none",
                     }}
-                    focusStyle={{ background: "rgba(255,255,255,0.03)", borderRadius: 4 }}
+                    focusStyle={{ background: "var(--stage-hover)", borderRadius: 4 }}
                     multiline
                     activeRole={activeRole}
                     lineId={line.id}
@@ -692,7 +789,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     style={{
                       fontFamily: "Libre Baskerville, serif",
                       fontSize: scriptTextSize,
-                      color: "#ffffff",
+                      color: "var(--stage-text)",
                       lineHeight: 1.75,
                       whiteSpace: "pre-wrap",
                     }}
@@ -712,7 +809,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1 px-1.5 py-0.5 rounded text-[10px] hover:bg-red-500/10"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    color: "#E84747",
+                    color: "var(--stage-error)",
                     border: "1px solid #E8474740",
                   }}
                 >
@@ -829,9 +926,9 @@ function EditableCuedText({
 function getSelectionCueLabel(role: ProjectRole): { label: string; color: string } | null {
   switch (role) {
     case "LIGHTING":
-      return { label: "+ cue", color: "#E8C547" };
+      return { label: "+ cue", color: "var(--stage-gold)" };
     case "SOUND":
-      return { label: "+ cue", color: "#E87847" };
+      return { label: "+ cue", color: "var(--stage-danger)" };
     case "ACTOR":
       return { label: "+ cue", color: "#F5F5F5" };
     case "PROPS":
@@ -839,7 +936,7 @@ function getSelectionCueLabel(role: ProjectRole): { label: string; color: string
     case "SET_DESIGN":
       return { label: "+ set", color: "#7BE847" };
     case "STAGE_MANAGER":
-      return { label: "+ cue", color: "#47B8E8" };
+      return { label: "+ cue", color: "var(--stage-info)" };
     case "DIRECTOR":
       return { label: "+ cue", color: "#F5F5F5" };
     default:
@@ -1101,8 +1198,8 @@ function SelectionPopup({ show, pos, cueLabel, lineId, onAddCue, onAddComment }:
         top: pos.y,
         left: Math.max(0, pos.x - 60),
         zIndex: 20,
-        background: "#1a1916",
-        border: "1px solid #2a2720",
+        background: "var(--stage-surface)",
+        border: "1px solid var(--stage-border)",
         borderRadius: 5,
         padding: "3px 4px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
@@ -1140,7 +1237,7 @@ function SelectionPopup({ show, pos, cueLabel, lineId, onAddCue, onAddComment }:
             fontFamily: "DM Mono, monospace",
             fontSize: 12,
             fontWeight: 600,
-            color: "#47B8E8",
+            color: "var(--stage-info)",
             background: "rgba(71, 184, 232, 0.08)",
             border: "1px solid rgba(71, 184, 232, 0.25)",
             borderRadius: 3,

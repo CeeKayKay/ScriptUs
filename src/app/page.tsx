@@ -3,6 +3,7 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ScriptImport } from "@/components/ScriptImport";
 
 interface ProjectSummary {
   id: string;
@@ -43,6 +44,9 @@ export default function HomePage() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
 
+  // --- Import state ---
+  const [importProjectId, setImportProjectId] = useState<string | null>(null);
+
   // --- Delete account ---
   const [deleting, setDeleting] = useState(false);
 
@@ -73,13 +77,13 @@ export default function HomePage() {
         <div className="text-center max-w-lg">
           <h1
             className="text-5xl font-bold mb-4"
-            style={{ fontFamily: "Playfair Display, serif", color: "#E8C547" }}
+            style={{ fontFamily: "Playfair Display, serif", color: "var(--stage-gold)" }}
           >
             ◆ SCRIPTUS
           </h1>
           <p
             className="text-lg mb-8"
-            style={{ fontFamily: "Libre Baskerville, serif", color: "#8a8070" }}
+            style={{ fontFamily: "Libre Baskerville, serif", color: "var(--stage-muted)" }}
           >
             Real-time collaborative script management for theater productions.
             Annotate cues, manage props, coordinate lighting — all in one shared
@@ -96,7 +100,7 @@ export default function HomePage() {
                   fontSize: 13,
                   background: "#E8C54715",
                   borderColor: "#E8C54740",
-                  color: "#E8C547",
+                  color: "var(--stage-gold)",
                 }}
               >
                 Sign in / Create Account
@@ -104,10 +108,10 @@ export default function HomePage() {
             ) : (
               <div
                 className="p-5 rounded-xl space-y-3 text-left"
-                style={{ background: "#1a1916", border: "1px solid #2a2720" }}
+                style={{ background: "var(--stage-surface)", border: "1px solid var(--stage-border)" }}
               >
                 {/* Toggle between Sign In and Create Account */}
-                <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #2a2720" }}>
+                <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--stage-border)" }}>
                   <button
                     onClick={() => { setIsSignUp(false); setLoginError(""); }}
                     className="flex-1 py-2 text-center transition-colors"
@@ -115,7 +119,7 @@ export default function HomePage() {
                       fontFamily: "DM Mono, monospace",
                       fontSize: 11,
                       background: !isSignUp ? "#E8C54715" : "transparent",
-                      color: !isSignUp ? "#E8C547" : "#666",
+                      color: !isSignUp ? "var(--stage-gold)" : "var(--stage-dim)",
                     }}
                   >
                     Sign In
@@ -127,8 +131,8 @@ export default function HomePage() {
                       fontFamily: "DM Mono, monospace",
                       fontSize: 11,
                       background: isSignUp ? "#E8C54715" : "transparent",
-                      color: isSignUp ? "#E8C547" : "#666",
-                      borderLeft: "1px solid #2a2720",
+                      color: isSignUp ? "var(--stage-gold)" : "var(--stage-dim)",
+                      borderLeft: "1px solid var(--stage-border)",
                     }}
                   >
                     Create Account
@@ -136,7 +140,7 @@ export default function HomePage() {
                 </div>
 
                 {loginError && (
-                  <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E84747" }}>
+                  <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "var(--stage-error)" }}>
                     {loginError}
                   </p>
                 )}
@@ -147,7 +151,7 @@ export default function HomePage() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 10,
-                      color: "#888",
+                      color: "var(--stage-muted)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                     }}
@@ -164,9 +168,9 @@ export default function HomePage() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 13,
-                      background: "#13120f",
-                      border: "1px solid #2a2720",
-                      color: "#e0ddd5",
+                      background: "var(--stage-bg)",
+                      border: "1px solid var(--stage-border)",
+                      color: "var(--stage-text)",
                     }}
                     autoFocus
                   />
@@ -178,7 +182,7 @@ export default function HomePage() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 10,
-                      color: "#888",
+                      color: "var(--stage-muted)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                     }}
@@ -195,9 +199,9 @@ export default function HomePage() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 13,
-                      background: "#13120f",
-                      border: "1px solid #2a2720",
-                      color: "#e0ddd5",
+                      background: "var(--stage-bg)",
+                      border: "1px solid var(--stage-border)",
+                      color: "var(--stage-text)",
                     }}
                   />
                 </div>
@@ -209,7 +213,7 @@ export default function HomePage() {
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: 10,
-                        color: "#888",
+                        color: "var(--stage-muted)",
                         letterSpacing: "0.08em",
                         textTransform: "uppercase",
                       }}
@@ -225,9 +229,9 @@ export default function HomePage() {
                       style={{
                         fontFamily: "DM Mono, monospace",
                         fontSize: 13,
-                        background: "#13120f",
-                        border: "1px solid #2a2720",
-                        color: "#e0ddd5",
+                        background: "var(--stage-bg)",
+                        border: "1px solid var(--stage-border)",
+                        color: "var(--stage-text)",
                       }}
                     />
                   </div>
@@ -261,7 +265,7 @@ export default function HomePage() {
                       fontWeight: 600,
                       background: "#E8C54715",
                       border: "1px solid #E8C54740",
-                      color: "#E8C547",
+                      color: "var(--stage-gold)",
                       opacity: loginSubmitting || !loginEmail.trim() || !loginPassword ? 0.5 : 1,
                     }}
                   >
@@ -273,8 +277,8 @@ export default function HomePage() {
                     style={{
                       fontFamily: "DM Mono, monospace",
                       fontSize: 13,
-                      color: "#888",
-                      border: "1px solid #333",
+                      color: "var(--stage-muted)",
+                      border: "1px solid var(--stage-border-subtle)",
                     }}
                   >
                     Cancel
@@ -293,7 +297,7 @@ export default function HomePage() {
       <div className="min-h-screen flex items-center justify-center">
         <div
           className="animate-pulse-dot text-2xl"
-          style={{ color: "#E8C547" }}
+          style={{ color: "var(--stage-gold)" }}
         >
           ◆
         </div>
@@ -308,7 +312,7 @@ export default function HomePage() {
         <div>
           <h1
             className="text-2xl sm:text-3xl font-bold mb-1"
-            style={{ fontFamily: "Playfair Display, serif", color: "#E8C547" }}
+            style={{ fontFamily: "Playfair Display, serif", color: "var(--stage-gold)" }}
           >
             ◆ SCRIPTUS
           </h1>
@@ -316,7 +320,7 @@ export default function HomePage() {
             style={{
               fontFamily: "Playfair Display, serif",
               fontSize: 20,
-              color: "#c8c0b0",
+              color: "var(--stage-heading)",
             }}
           >
             Welcome back, {session?.user?.name || "Director"}
@@ -329,9 +333,9 @@ export default function HomePage() {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 12,
-              background: "#1a1916",
-              border: "1px solid #2a2720",
-              color: "#888",
+              background: "var(--stage-surface)",
+              border: "1px solid var(--stage-border)",
+              color: "var(--stage-muted)",
             }}
           >
             Sign Out
@@ -344,7 +348,7 @@ export default function HomePage() {
               fontSize: 12,
               background: "#E8C54715",
               border: "1px solid #E8C54740",
-              color: "#E8C547",
+              color: "var(--stage-gold)",
             }}
           >
             + New Production
@@ -357,8 +361,8 @@ export default function HomePage() {
         <div
           className="text-center py-20 rounded-xl border"
           style={{
-            background: "#1a1916",
-            borderColor: "#2a2720",
+            background: "var(--stage-surface)",
+            borderColor: "var(--stage-border)",
           }}
         >
           <div className="text-4xl mb-4">🎭</div>
@@ -366,7 +370,7 @@ export default function HomePage() {
             style={{
               fontFamily: "Playfair Display, serif",
               fontSize: 20,
-              color: "#8a8070",
+              color: "var(--stage-muted)",
             }}
           >
             No productions yet
@@ -374,67 +378,90 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {projects.map((p) => (
-            <Link
-              key={p.id}
-              href={`/project/${p.id}`}
-              className="block p-6 rounded-xl border transition-all hover:border-opacity-50"
-              style={{
-                background: "#1a1916",
-                borderColor: "#2a2720",
-              }}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                <div>
-                  <h2
-                    className="text-xl font-semibold mb-1"
-                    style={{ fontFamily: "Playfair Display, serif" }}
-                  >
-                    {p.title}
-                  </h2>
-                  {p.subtitle && (
-                    <p
-                      style={{
-                        fontFamily: "Libre Baskerville, serif",
-                        fontSize: 13,
-                        color: "#8a8070",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      {p.subtitle}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className="px-3 py-1 rounded-md text-xs"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    background: "#E8C54710",
-                    color: "#E8C547",
-                    border: "1px solid #E8C54720",
-                  }}
-                >
-                  {(p.myRoles || []).map((r: string) => r.replace(/_/g, " ")).join(", ")}
-                </span>
-              </div>
-
+          {projects.map((p) => {
+            const canImport = (p.myRoles || []).some((r: string) =>
+              ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(r)
+            );
+            return (
               <div
-                className="flex flex-wrap gap-3 sm:gap-6 mt-3 sm:mt-4"
+                key={p.id}
+                className="p-6 rounded-xl border transition-all hover:border-opacity-50"
                 style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 11,
-                  color: "#666",
+                  background: "var(--stage-surface)",
+                  borderColor: "var(--stage-border)",
                 }}
               >
-                <span>{p.sceneCount} scenes</span>
-                <span>{p.cueCount} cues</span>
-                <span>{p.memberCount} members</span>
-                <span className="ml-auto">
-                  Updated {new Date(p.updatedAt).toLocaleDateString()}
-                </span>
+                <Link href={`/project/${p.id}`} className="block">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div>
+                      <h2
+                        className="text-xl font-semibold mb-1"
+                        style={{ fontFamily: "Playfair Display, serif" }}
+                      >
+                        {p.title}
+                      </h2>
+                      {p.subtitle && (
+                        <p
+                          style={{
+                            fontFamily: "Libre Baskerville, serif",
+                            fontSize: 13,
+                            color: "var(--stage-muted)",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {p.subtitle}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className="px-3 py-1 rounded-md text-xs"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        background: "#E8C54710",
+                        color: "var(--stage-gold)",
+                        border: "1px solid #E8C54720",
+                      }}
+                    >
+                      {(p.myRoles || []).map((r: string) => r.replace(/_/g, " ")).join(", ")}
+                    </span>
+                  </div>
+
+                  <div
+                    className="flex flex-wrap gap-3 sm:gap-6 mt-3 sm:mt-4"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 11,
+                      color: "var(--stage-dim)",
+                    }}
+                  >
+                    <span>{p.sceneCount} scenes</span>
+                    <span>{p.cueCount} cues</span>
+                    <span>{p.memberCount} members</span>
+                    <span className="ml-auto">
+                      Updated {new Date(p.updatedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Link>
+
+                {canImport && (
+                  <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--stage-border)" }}>
+                    <button
+                      onClick={() => setImportProjectId(p.id)}
+                      className="px-4 py-2 rounded-lg transition-colors hover:bg-white/5"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 11,
+                        color: "var(--stage-muted)",
+                        border: "1px solid var(--stage-border-subtle)",
+                      }}
+                    >
+                      Import Script
+                    </button>
+                  </div>
+                )}
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -448,13 +475,27 @@ export default function HomePage() {
             fontFamily: "DM Mono, monospace",
             fontSize: 11,
             border: "1px solid rgba(232, 71, 71, 0.2)",
-            color: "#E84747",
+            color: "var(--stage-error)",
             opacity: deleting ? 0.5 : 0.6,
           }}
         >
           {deleting ? "Deleting..." : "Delete Account"}
         </button>
       </div>
+
+      {/* Script Import Modal */}
+      {importProjectId && (
+        <ScriptImport
+          projectId={importProjectId}
+          onClose={() => setImportProjectId(null)}
+          onImported={() => {
+            // Refresh project list to update scene counts
+            fetch("/api/projects")
+              .then((r) => r.json())
+              .then((data) => setProjects(data.projects || []));
+          }}
+        />
+      )}
     </div>
   );
 }

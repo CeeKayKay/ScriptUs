@@ -17,24 +17,40 @@ export function Header({ connected, synced }: HeaderProps) {
     <div
       className="relative flex items-center justify-between flex-shrink-0"
       style={{
-        background: "#1a1916",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        background: "var(--stage-surface)",
+        borderBottom: "1px solid var(--stage-hover)",
         padding: isMobile ? "8px 12px" : "12px 20px",
       }}
     >
-      {/* Left: Logo + connection */}
+      {/* Left: Logo + back + connection */}
       <div className="flex items-center gap-2">
         <Link
           href="/"
           className="font-bold hover:opacity-80 transition-opacity"
           style={{
             fontFamily: "Playfair Display, serif",
-            color: "#E8C547",
+            color: "var(--stage-gold)",
             letterSpacing: "0.05em",
             fontSize: isMobile ? 14 : 18,
           }}
+          title="Back to Productions"
         >
           {isMobile ? "◆" : "◆ SCRIPTUS"}
+        </Link>
+
+        <Link
+          href="/"
+          className="rounded-md flex items-center justify-center hover:bg-white/5 transition-colors"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: isMobile ? 12 : 14,
+            color: "var(--stage-dim)",
+            border: "1px solid var(--stage-hover-strong)",
+            padding: isMobile ? "4px 8px" : "4px 10px",
+          }}
+          title="Back to Productions"
+        >
+          ← Productions
         </Link>
 
         {/* Connection indicator */}
@@ -43,13 +59,13 @@ export function Header({ connected, synced }: HeaderProps) {
           style={{
             fontFamily: "DM Mono, monospace",
             fontSize: 10,
-            color: connected ? "#47E86A" : "#E87847",
+            color: connected ? "var(--stage-success)" : "var(--stage-danger)",
           }}
         >
           <span
             className="inline-block w-1.5 h-1.5 rounded-full animate-pulse-dot"
             style={{
-              background: connected ? "#47E86A" : "#E87847",
+              background: connected ? "var(--stage-success)" : "var(--stage-danger)",
             }}
           />
           {connected ? (synced ? "LIVE" : "SYNCING") : "OFFLINE"}
@@ -63,10 +79,10 @@ export function Header({ connected, synced }: HeaderProps) {
         >
           <span
             style={{
-              fontFamily: "Playfair Display, serif",
+              fontFamily: "DM Mono, monospace",
               fontSize: 22,
               fontWeight: 600,
-              color: "#c8c0b0",
+              color: "var(--stage-heading)",
               letterSpacing: "0.06em",
               whiteSpace: "nowrap",
             }}
@@ -81,10 +97,10 @@ export function Header({ connected, synced }: HeaderProps) {
         <span
           className="flex-1 text-center truncate mx-2"
           style={{
-            fontFamily: "Playfair Display, serif",
+            fontFamily: "DM Mono, monospace",
             fontSize: 14,
             fontWeight: 600,
-            color: "#c8c0b0",
+            color: "var(--stage-heading)",
           }}
         >
           {projectTitle}
@@ -98,9 +114,9 @@ export function Header({ connected, synced }: HeaderProps) {
           onClick={openSettings}
           className="rounded-md flex items-center justify-center hover:bg-white/5 transition-colors"
           style={{
-            color: "#888",
+            color: "var(--stage-muted)",
             fontSize: isMobile ? 20 : 24,
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid var(--stage-hover-strong)",
             width: isMobile ? 36 : 40,
             height: isMobile ? 36 : 40,
           }}
@@ -114,7 +130,7 @@ export function Header({ connected, synced }: HeaderProps) {
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 10,
-              color: "#555",
+              color: "var(--stage-faint)",
               marginRight: 4,
             }}
           >
@@ -127,7 +143,7 @@ export function Header({ connected, synced }: HeaderProps) {
             <div
               key={`${user.userId}-${i}`}
               data-tooltip={`${user.name} (${user.role.replace("_", " ")})`}
-              className="rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ring-[#1a1916]"
+              className="rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ring-[var(--stage-surface)]"
               style={{
                 background: user.color + "25",
                 border: `1.5px solid ${user.color}`,
@@ -147,11 +163,11 @@ export function Header({ connected, synced }: HeaderProps) {
           ))}
           {onlineUsers.length > (isMobile ? 3 : 6) && (
             <div
-              className="rounded-full flex items-center justify-center text-[9px] ring-2 ring-[#1a1916]"
+              className="rounded-full flex items-center justify-center text-[9px] ring-2 ring-[var(--stage-surface)]"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1.5px solid #444",
-                color: "#888",
+                background: "var(--stage-hover)",
+                border: "1.5px solid var(--stage-ultra-faint)",
+                color: "var(--stage-muted)",
                 fontFamily: "DM Mono, monospace",
                 width: isMobile ? 24 : 28,
                 height: isMobile ? 24 : 28,

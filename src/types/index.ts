@@ -31,7 +31,8 @@ export type LineType =
   | "ACT_HEADER"
   | "SCENE_HEADER"
   | "SONG"
-  | "TRANSITION";
+  | "TRANSITION"
+  | "LOCATION";
 
 // ---- View Models ----
 
@@ -151,6 +152,26 @@ export interface CustomCueTypeView {
   bgColor: string;
   borderColor: string;
   associatedRole: string;
+}
+
+export interface CharacterView {
+  id: string;
+  name: string;
+  groupId: string | null;
+  sortOrder: number;
+}
+
+export interface CharacterGroupView {
+  id: string;
+  name: string;
+  sortOrder: number;
+  characters: CharacterView[];
+}
+
+export interface LocationView {
+  id: string;
+  name: string;
+  sortOrder: number;
 }
 
 export interface InviteView {
