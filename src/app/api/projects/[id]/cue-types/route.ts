@@ -20,7 +20,7 @@ export async function PUT(
     where: { userId_projectId: { userId, projectId } },
   });
 
-  if (!membership || !["STAGE_MANAGER", "DIRECTOR"].includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -76,7 +76,7 @@ export async function DELETE(
     where: { userId_projectId: { userId, projectId } },
   });
 
-  if (!membership || !["STAGE_MANAGER", "DIRECTOR"].includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -122,7 +122,7 @@ export async function POST(
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
-  if (!["STAGE_MANAGER", "DIRECTOR"].includes(membership.role)) {
+  if (!membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR"].includes(r))) {
     return NextResponse.json(
       { error: "Only Stage Managers and Directors can add cue types" },
       { status: 403 }

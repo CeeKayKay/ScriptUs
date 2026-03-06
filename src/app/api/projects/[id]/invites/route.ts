@@ -22,7 +22,7 @@ export async function GET(
   const membership = await prisma.projectMember.findUnique({
     where: { userId_projectId: { userId, projectId } },
   });
-  if (!membership || !ADMIN_ROLES.includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ADMIN_ROLES.includes(r))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -60,7 +60,7 @@ export async function POST(
   const membership = await prisma.projectMember.findUnique({
     where: { userId_projectId: { userId, projectId } },
   });
-  if (!membership || !ADMIN_ROLES.includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ADMIN_ROLES.includes(r))) {
     return NextResponse.json({ error: "Only Stage Manager or Director can invite" }, { status: 403 });
   }
 
@@ -93,7 +93,7 @@ export async function POST(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { title: true },
+    select: { title: true, smtpUser: true, smtpPass: true },
   });
 
   const expiresAt = new Date();
@@ -116,8 +116,8 @@ export async function POST(
     include: { sentBy: { select: { name: true } } },
   });
 
-  // Send email
-  const baseUrl = process.env.NEXTAUTH_URL || req.nextUrl.origin;
+  // Send email — use NEXTAUTH_URL for production, fall back to origin
+  const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : req.nextUrl.origin);
   const acceptUrl = `${baseUrl}/invite/${invite.token}`;
 
   try {
@@ -127,6 +127,8 @@ export async function POST(
       role,
       inviterName: session.user.name || "Someone",
       acceptUrl,
+      smtpUser: project?.smtpUser || undefined,
+      smtpPass: project?.smtpPass || undefined,
     });
   } catch (e) {
     console.error("Failed to send invite email:", e);
@@ -159,7 +161,7 @@ export async function DELETE(
   const membership = await prisma.projectMember.findUnique({
     where: { userId_projectId: { userId, projectId } },
   });
-  if (!membership || !ADMIN_ROLES.includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ADMIN_ROLES.includes(r))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -188,18 +190,36 @@ export async function PATCH(
   const membership = await prisma.projectMember.findUnique({
     where: { userId_projectId: { userId, projectId } },
   });
-  if (!membership || !ADMIN_ROLES.includes(membership.role)) {
+  if (!membership || !membership.roles.some((r: string) => ADMIN_ROLES.includes(r))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   const body = await req.json();
-  if (body.memberId && body.role) {
+
+  // Delete a member
+  if (body.memberId && body.action === "remove") {
+    const target = await prisma.projectMember.findUnique({
+      where: { id: body.memberId },
+    });
+    if (!target || target.projectId !== projectId) {
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+    // Prevent removing yourself
+    if (target.userId === userId) {
+      return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
+    }
+    await prisma.projectMember.delete({ where: { id: body.memberId } });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Update member roles
+  if (body.memberId && body.roles) {
     await prisma.projectMember.update({
       where: { id: body.memberId },
-      data: { role: body.role },
+      data: { roles: body.roles },
     });
     return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ error: "memberId and role required" }, { status: 400 });
+  return NextResponse.json({ error: "memberId and roles required" }, { status: 400 });
 }

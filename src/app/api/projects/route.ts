@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     cueCount: m.project._count.cues,
     sceneCount: m.project._count.scenes,
     updatedAt: m.project.updatedAt.toISOString(),
-    myRole: m.role,
+    myRoles: m.roles,
   }));
 
   return NextResponse.json({ projects });
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       members: {
         create: {
           userId,
-          role: "STAGE_MANAGER", // Creator defaults to stage manager
+          roles: ["STAGE_MANAGER"], // Creator defaults to stage manager
         },
       },
     },

@@ -10,12 +10,12 @@ import type { ProjectRole, CustomRoleView, CustomCueTypeView } from "@/types";
 
 interface SettingsProps {
   projectId: string;
-  myRole: ProjectRole;
+  myRoles: ProjectRole[];
 }
 
 import type { InviteView } from "@/types";
 
-type SettingsTab = "preferences" | "team" | "roles" | "cue-types";
+type SettingsTab = "preferences" | "team" | "roles" | "cue-types" | "email";
 
 const ADMIN_ROLES: ProjectRole[] = ["STAGE_MANAGER", "DIRECTOR"];
 
@@ -43,7 +43,7 @@ const labelStyle = {
   textTransform: "uppercase" as const,
 } as const;
 
-export function Settings({ projectId, myRole }: SettingsProps) {
+export function Settings({ projectId, myRoles }: SettingsProps) {
   const {
     closeSettings,
     cuePanelSide,
@@ -55,7 +55,7 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     members,
   } = useStageStore();
 
-  const isAdmin = ADMIN_ROLES.includes(myRole);
+  const isAdmin = myRoles.some((r) => ADMIN_ROLES.includes(r));
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<SettingsTab>("preferences");
 
@@ -85,6 +85,13 @@ export function Settings({ projectId, myRole }: SettingsProps) {
 
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAddCueType, setShowAddCueType] = useState(false);
+
+  // --- SMTP state ---
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPass, setSmtpPass] = useState("");
+  const [smtpLoaded, setSmtpLoaded] = useState(false);
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpStatus, setSmtpStatus] = useState<string | null>(null);
 
   // --- Edit state ---
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
@@ -291,6 +298,22 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     }
   };
 
+  // Load SMTP settings when email tab is opened
+  useEffect(() => {
+    if (activeTab !== "email" || !isAdmin || smtpLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          setSmtpUser(data.smtpUser || "");
+          if (data.smtpConfigured) setSmtpPass("••••••••");
+        }
+      } catch {}
+      setSmtpLoaded(true);
+    })();
+  }, [activeTab, isAdmin, smtpLoaded, projectId]);
+
   // Load invites when team tab is opened
   useEffect(() => {
     if (activeTab !== "team" || !isAdmin || invitesLoaded) return;
@@ -345,12 +368,31 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     } catch {}
   };
 
-  const handleUpdateMemberRole = async (memberId: string, role: ProjectRole) => {
+  // Local member state for optimistic UI updates
+  const [localMembers, setLocalMembers] = useState(members);
+  useEffect(() => { setLocalMembers(members); }, [members]);
+
+  const handleUpdateMemberRoles = (memberId: string, roles: ProjectRole[]) => {
+    if (roles.length === 0) return;
+    // Optimistic update
+    setLocalMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, roles } : m))
+    );
+    // Fire and forget API call
+    fetch(`/api/projects/${projectId}/invites`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, roles }),
+    }).catch(() => {});
+  };
+
+  const handleRemoveMember = async (memberId: string, name: string) => {
+    if (!confirm(`Remove ${name} from this production? They will lose access.`)) return;
     try {
       await fetch(`/api/projects/${projectId}/invites`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId, role }),
+        body: JSON.stringify({ memberId, action: "remove" }),
       });
       window.location.reload();
     } catch {}
@@ -361,6 +403,7 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     { id: "team", label: "Team", adminOnly: true },
     { id: "roles", label: "Roles", adminOnly: true },
     { id: "cue-types", label: "Cue Types", adminOnly: true },
+    { id: "email", label: "Email", adminOnly: true },
   ];
 
   const visibleTabs = tabs.filter((t) => !t.adminOnly || isAdmin);
@@ -646,45 +689,67 @@ export function Settings({ projectId, myRole }: SettingsProps) {
               <div>
                 <div className="mb-2" style={labelStyle}>Members</div>
                 <div className="space-y-1.5">
-                  {members.map((m) => (
+                  {localMembers.map((m) => (
                     <div
                       key={m.id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+                      className="px-3 py-2.5 rounded-lg"
                       style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #222" }}
                     >
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                        style={{
-                          background: "rgba(232,197,71,0.1)",
-                          border: "1px solid #E8C54740",
-                          color: "#E8C547",
-                          fontFamily: "DM Mono, monospace",
-                        }}
-                      >
-                        {(m.name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#e0ddd5", fontWeight: 600 }}>
-                          {m.name}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                          style={{
+                            background: "rgba(232,197,71,0.1)",
+                            border: "1px solid #E8C54740",
+                            color: "#E8C547",
+                            fontFamily: "DM Mono, monospace",
+                          }}
+                        >
+                          {(m.name || "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </div>
-                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#666" }}>
-                          {m.email}
+                        <div className="flex-1 min-w-0">
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#e0ddd5", fontWeight: 600 }}>
+                            {m.name}
+                          </div>
+                          <div style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#666" }}>
+                            {m.email}
+                          </div>
                         </div>
+                        <button
+                          onClick={() => handleRemoveMember(m.id, m.name)}
+                          className="px-2 py-1 rounded text-[10px] hover:bg-red-500/10 transition-colors flex-shrink-0"
+                          style={{ fontFamily: "DM Mono, monospace", color: "#E84747", border: "1px solid #E8474730" }}
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <select
-                        value={m.role}
-                        onChange={(e) => handleUpdateMemberRole(m.id, e.target.value as ProjectRole)}
-                        className="px-2 py-1 rounded"
-                        style={{
-                          ...inputStyle,
-                          fontSize: 10,
-                          color: "#E8C547",
-                        }}
-                      >
-                        {ROLE_LIST.map((r) => (
-                          <option key={r.id} value={r.id}>{r.label}</option>
-                        ))}
-                      </select>
+                      {/* Multi-role checkboxes */}
+                      <div className="flex flex-wrap gap-1.5 mt-2 ml-10">
+                        {ROLE_LIST.map((r) => {
+                          const hasRole = m.roles.includes(r.id);
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                const newRoles = hasRole
+                                  ? m.roles.filter((x: ProjectRole) => x !== r.id)
+                                  : [...m.roles, r.id];
+                                if (newRoles.length > 0) handleUpdateMemberRoles(m.id, newRoles as ProjectRole[]);
+                              }}
+                              className="px-2 py-0.5 rounded transition-all"
+                              style={{
+                                fontFamily: "DM Mono, monospace",
+                                fontSize: 9,
+                                color: hasRole ? r.color : "#555",
+                                background: hasRole ? r.color + "15" : "transparent",
+                                border: `1px solid ${hasRole ? r.color + "40" : "#333"}`,
+                              }}
+                            >
+                              {r.icon} {r.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1174,6 +1239,142 @@ export function Settings({ projectId, myRole }: SettingsProps) {
                   + Add Custom Cue Type
                 </button>
               )}
+              </div>
+            </div>
+          )}
+
+          {/* ===== EMAIL TAB ===== */}
+          {activeTab === "email" && isAdmin && (
+            <div className="space-y-4">
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}>
+                Configure Gmail SMTP to send invite emails from your own address.
+              </p>
+
+              <div
+                className="p-4 rounded-lg space-y-3"
+                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
+              >
+                <div style={labelStyle}>Gmail SMTP Setup</div>
+
+                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
+                  Use a Gmail App Password (not your regular password).
+                  Go to Google Account → Security → 2-Step Verification → App Passwords to generate one.
+                </p>
+
+                <div>
+                  <label className="block mb-1.5" style={labelStyle}>Gmail Address</label>
+                  <input
+                    type="email"
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="you@gmail.com"
+                    className="w-full px-3 py-2 rounded"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1.5" style={labelStyle}>App Password</label>
+                  <input
+                    type="password"
+                    value={smtpPass}
+                    onChange={(e) => setSmtpPass(e.target.value)}
+                    placeholder="16-character app password"
+                    className="w-full px-3 py-2 rounded"
+                    style={inputStyle}
+                    onFocus={() => { if (smtpPass === "••••••••") setSmtpPass(""); }}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={async () => {
+                      setSmtpSaving(true);
+                      setSmtpStatus(null);
+                      try {
+                        const body: Record<string, string> = { smtpUser };
+                        if (smtpPass && smtpPass !== "••••••••") body.smtpPass = smtpPass;
+                        const res = await fetch(`/api/projects/${projectId}/settings`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(body),
+                        });
+                        if (res.ok) {
+                          setSmtpStatus("Saved successfully");
+                          if (smtpPass && smtpPass !== "••••••••") setSmtpPass("••••••••");
+                        } else {
+                          setSmtpStatus("Failed to save");
+                        }
+                      } catch {
+                        setSmtpStatus("Failed to save");
+                      }
+                      setSmtpSaving(false);
+                      setTimeout(() => setSmtpStatus(null), 3000);
+                    }}
+                    disabled={smtpSaving || !smtpUser.trim()}
+                    className="px-4 py-2 rounded transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#E8C547",
+                      background: "#E8C54715",
+                      border: "1px solid #E8C54740",
+                      opacity: smtpSaving || !smtpUser.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {smtpSaving ? "Saving..." : "Save SMTP Settings"}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setSmtpSaving(true);
+                      setSmtpStatus(null);
+                      try {
+                        await fetch(`/api/projects/${projectId}/settings`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ smtpUser: "", smtpPass: "" }),
+                        });
+                        setSmtpUser("");
+                        setSmtpPass("");
+                        setSmtpStatus("SMTP settings cleared");
+                      } catch {
+                        setSmtpStatus("Failed to clear");
+                      }
+                      setSmtpSaving(false);
+                      setTimeout(() => setSmtpStatus(null), 3000);
+                    }}
+                    className="px-4 py-2 rounded transition-colors hover:bg-white/5"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 11,
+                      color: "#888",
+                      border: "1px solid #333",
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {smtpStatus && (
+                  <div style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 11,
+                    color: smtpStatus.includes("success") || smtpStatus.includes("cleared") ? "#47E86A" : "#E87847",
+                  }}>
+                    {smtpStatus}
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="p-3 rounded-lg"
+                style={{ background: "rgba(71,184,232,0.05)", border: "1px solid rgba(71,184,232,0.15)" }}
+              >
+                <p style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#47B8E8", lineHeight: 1.6 }}>
+                  If no SMTP is configured here, the system will use the default server settings.
+                  Per-project SMTP lets invites come from your own email address.
+                </p>
               </div>
             </div>
           )}

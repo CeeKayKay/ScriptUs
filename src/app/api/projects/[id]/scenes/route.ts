@@ -24,7 +24,7 @@ export async function POST(
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
-  if (!["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(membership.role)) {
+  if (!membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(r))) {
     return NextResponse.json(
       { error: "Only Stage Managers, Directors, and Writers can add scenes" },
       { status: 403 }
@@ -137,7 +137,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
-  if (!["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(membership.role)) {
+  if (!membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(r))) {
     return NextResponse.json(
       { error: "Only Stage Managers, Directors, and Writers can edit script content" },
       { status: 403 }
@@ -222,7 +222,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
-  if (!["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(membership.role)) {
+  if (!membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -278,7 +278,7 @@ export async function PUT(
   }
 
   // Writers: SM, Director, or anyone with write intent
-  if (!["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(membership.role)) {
+  if (!membership.roles.some((r: string) => ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(r))) {
     return NextResponse.json(
       { error: "Only Stage Managers, Directors, and Writers can edit script content" },
       { status: 403 }

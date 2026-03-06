@@ -35,10 +35,10 @@ export async function POST(req: NextRequest) {
     PROPS: ["PROPS"],
   };
 
-  const allowed = rolePermissions[membership.role] || [];
-  if (!allowed.includes(body.type)) {
+  const allowed = new Set(membership.roles.flatMap((r: string) => rolePermissions[r] || []));
+  if (!allowed.has(body.type)) {
     return NextResponse.json(
-      { error: `Role ${membership.role} cannot create ${body.type} cues` },
+      { error: `Your roles cannot create ${body.type} cues` },
       { status: 403 }
     );
   }
@@ -97,7 +97,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    if (membership?.role !== "STAGE_MANAGER") {
+    if (!membership?.roles.includes("STAGE_MANAGER")) {
       return NextResponse.json(
         { error: "Only stage manager can edit locked cues" },
         { status: 403 }
@@ -159,7 +159,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   // Only stage manager or cue creator can delete
-  if (membership.role !== "STAGE_MANAGER" && cue.createdById !== userId) {
+  if (!membership.roles.includes("STAGE_MANAGER") && cue.createdById !== userId) {
     return NextResponse.json(
       { error: "Only stage manager or creator can delete cues" },
       { status: 403 }

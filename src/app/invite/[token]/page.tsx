@@ -15,6 +15,12 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
   const [invite, setInvite] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/invites/${params.token}`)
@@ -28,8 +34,6 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
 
   const handleAccept = async () => {
     if (!session?.user) {
-      // Redirect to sign in, then back here
-      signIn("google", { callbackUrl: `/invite/${params.token}` });
       return;
     }
 
@@ -131,22 +135,121 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
         </div>
 
         {status === "unauthenticated" ? (
-          <div className="space-y-3">
-            <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#888" }}>
-              Sign in to accept this invitation
-            </p>
+          <div
+            className="p-5 rounded-xl space-y-3 text-left"
+            style={{ background: "#1a1916", border: "1px solid #2a2720" }}
+          >
+            <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #2a2720" }}>
+              <button
+                onClick={() => { setIsSignUp(false); setAuthError(""); }}
+                className="flex-1 py-2 text-center transition-colors"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 11,
+                  background: !isSignUp ? "#E8C54715" : "transparent",
+                  color: !isSignUp ? "#E8C547" : "#666",
+                }}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setIsSignUp(true); setAuthError(""); }}
+                className="flex-1 py-2 text-center transition-colors"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 11,
+                  background: isSignUp ? "#E8C54715" : "transparent",
+                  color: isSignUp ? "#E8C547" : "#666",
+                  borderLeft: "1px solid #2a2720",
+                }}
+              >
+                Create Account
+              </button>
+            </div>
+
+            {authError && (
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E84747" }}>
+                {authError}
+              </p>
+            )}
+
+            <div>
+              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-4 py-2.5 rounded-lg outline-none"
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isSignUp ? "Create a password" : "Enter your password"}
+                className="w-full px-4 py-2.5 rounded-lg outline-none"
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+              />
+            </div>
+
+            {isSignUp && (
+              <div>
+                <label className="block mb-1.5" style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full px-4 py-2.5 rounded-lg outline-none"
+                  style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "#13120f", border: "1px solid #2a2720", color: "#e0ddd5" }}
+                />
+              </div>
+            )}
+
             <button
-              onClick={() => signIn("google", { callbackUrl: `/invite/${params.token}` })}
-              className="w-full px-6 py-3 rounded-lg border transition-colors"
+              onClick={async () => {
+                if (!email.trim() || !password) return;
+                setAuthSubmitting(true);
+                setAuthError("");
+                const res = await signIn("credentials", {
+                  email: email.trim(),
+                  password,
+                  name: name.trim() || undefined,
+                  isSignUp: isSignUp ? "true" : "false",
+                  redirect: false,
+                });
+                if (res?.error) {
+                  setAuthError(res.error);
+                  setAuthSubmitting(false);
+                } else {
+                  window.location.reload();
+                }
+              }}
+              disabled={authSubmitting || !email.trim() || !password}
+              className="w-full px-5 py-2.5 rounded-lg transition-colors"
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 13,
-                background: "#1a1916",
-                borderColor: "#2a2720",
-                color: "#e0ddd5",
+                fontWeight: 600,
+                background: "#E8C54715",
+                border: "1px solid #E8C54740",
+                color: "#E8C547",
+                opacity: authSubmitting || !email.trim() || !password ? 0.5 : 1,
               }}
             >
-              Sign in with Google
+              {authSubmitting ? (isSignUp ? "Creating..." : "Signing in...") : (isSignUp ? "Create Account & Join" : "Sign In & Join")}
             </button>
           </div>
         ) : (

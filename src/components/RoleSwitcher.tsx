@@ -7,10 +7,10 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectRole } from "@/types";
 
 interface RoleSwitcherProps {
-  myRole: ProjectRole;
+  myRoles: ProjectRole[];
 }
 
-export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
+export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
   const { activeRole, setActiveRole } = useStageStore();
   const activeConfig = ROLES[activeRole];
   const isMobile = useIsMobile();
@@ -66,7 +66,7 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
               {isMobile && isActive && (
                 <span>{role.label}</span>
               )}
-              {role.id === myRole && (
+              {myRoles.includes(role.id) && (
                 <span
                   className="text-[8px] px-1 py-0.5 rounded"
                   style={{

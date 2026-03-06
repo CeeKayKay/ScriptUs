@@ -76,7 +76,7 @@ export async function POST(
       lineId: body.lineId,
       scriptRef: body.scriptRef || null,
       text: body.text.trim(),
-      role: body.role || membership.role,
+      role: body.role || membership.roles[0],
       userId,
     },
     include: {
@@ -160,7 +160,7 @@ export async function DELETE(
   }
 
   // Only comment author or stage manager can delete
-  if (comment.userId !== userId && membership.role !== "STAGE_MANAGER") {
+  if (comment.userId !== userId && !membership.roles.includes("STAGE_MANAGER")) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

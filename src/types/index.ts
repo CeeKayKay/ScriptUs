@@ -117,7 +117,7 @@ export interface MemberView {
   userId: string;
   name: string;
   email: string;
-  role: ProjectRole;
+  roles: ProjectRole[];
   character?: string;
   image?: string;
 }

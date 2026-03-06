@@ -12,7 +12,7 @@ interface ProjectSummary {
   cueCount: number;
   sceneCount: number;
   updatedAt: string;
-  myRole: string;
+  myRoles: string[];
 }
 
 export default function HomePage() {
@@ -36,9 +36,12 @@ export default function HomePage() {
 
   // --- Login form state ---
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [loginName, setLoginName] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   // --- Delete account ---
   const [deleting, setDeleting] = useState(false);
@@ -103,6 +106,41 @@ export default function HomePage() {
                 className="p-5 rounded-xl space-y-3 text-left"
                 style={{ background: "#1a1916", border: "1px solid #2a2720" }}
               >
+                {/* Toggle between Sign In and Create Account */}
+                <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #2a2720" }}>
+                  <button
+                    onClick={() => { setIsSignUp(false); setLoginError(""); }}
+                    className="flex-1 py-2 text-center transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 11,
+                      background: !isSignUp ? "#E8C54715" : "transparent",
+                      color: !isSignUp ? "#E8C547" : "#666",
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => { setIsSignUp(true); setLoginError(""); }}
+                    className="flex-1 py-2 text-center transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 11,
+                      background: isSignUp ? "#E8C54715" : "transparent",
+                      color: isSignUp ? "#E8C547" : "#666",
+                      borderLeft: "1px solid #2a2720",
+                    }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+
+                {loginError && (
+                  <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E84747" }}>
+                    {loginError}
+                  </p>
+                )}
+
                 <div>
                   <label
                     className="block mb-1.5"
@@ -130,19 +168,10 @@ export default function HomePage() {
                       border: "1px solid #2a2720",
                       color: "#e0ddd5",
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && loginEmail.trim()) {
-                        e.preventDefault();
-                        setLoginSubmitting(true);
-                        signIn("credentials", {
-                          email: loginEmail.trim(),
-                          name: loginName.trim() || undefined,
-                        });
-                      }
-                    }}
                     autoFocus
                   />
                 </div>
+
                 <div>
                   <label
                     className="block mb-1.5"
@@ -154,13 +183,14 @@ export default function HomePage() {
                       textTransform: "uppercase",
                     }}
                   >
-                    Name <span style={{ color: "#555" }}>(for new accounts)</span>
+                    Password
                   </label>
                   <input
-                    type="text"
-                    value={loginName}
-                    onChange={(e) => setLoginName(e.target.value)}
-                    placeholder="Your name"
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder={isSignUp ? "Create a password" : "Enter your password"}
+                    required
                     className="w-full px-4 py-2.5 rounded-lg outline-none"
                     style={{
                       fontFamily: "DM Mono, monospace",
@@ -169,29 +199,61 @@ export default function HomePage() {
                       border: "1px solid #2a2720",
                       color: "#e0ddd5",
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && loginEmail.trim()) {
-                        e.preventDefault();
-                        setLoginSubmitting(true);
-                        signIn("credentials", {
-                          email: loginEmail.trim(),
-                          name: loginName.trim() || undefined,
-                        });
-                      }
-                    }}
                   />
                 </div>
+
+                {isSignUp && (
+                  <div>
+                    <label
+                      className="block mb-1.5"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 10,
+                        color: "#888",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      value={loginName}
+                      onChange={(e) => setLoginName(e.target.value)}
+                      placeholder="Your name"
+                      className="w-full px-4 py-2.5 rounded-lg outline-none"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 13,
+                        background: "#13120f",
+                        border: "1px solid #2a2720",
+                        color: "#e0ddd5",
+                      }}
+                    />
+                  </div>
+                )}
+
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => {
-                      if (!loginEmail.trim()) return;
+                    onClick={async () => {
+                      if (!loginEmail.trim() || !loginPassword) return;
                       setLoginSubmitting(true);
-                      signIn("credentials", {
+                      setLoginError("");
+                      const res = await signIn("credentials", {
                         email: loginEmail.trim(),
+                        password: loginPassword,
                         name: loginName.trim() || undefined,
+                        isSignUp: isSignUp ? "true" : "false",
+                        redirect: false,
                       });
+                      if (res?.error) {
+                        setLoginError(res.error);
+                        setLoginSubmitting(false);
+                      } else {
+                        window.location.href = "/";
+                      }
                     }}
-                    disabled={loginSubmitting || !loginEmail.trim()}
+                    disabled={loginSubmitting || !loginEmail.trim() || !loginPassword}
                     className="flex-1 px-5 py-2.5 rounded-lg transition-colors"
                     style={{
                       fontFamily: "DM Mono, monospace",
@@ -200,13 +262,13 @@ export default function HomePage() {
                       background: "#E8C54715",
                       border: "1px solid #E8C54740",
                       color: "#E8C547",
-                      opacity: loginSubmitting || !loginEmail.trim() ? 0.5 : 1,
+                      opacity: loginSubmitting || !loginEmail.trim() || !loginPassword ? 0.5 : 1,
                     }}
                   >
-                    {loginSubmitting ? "Signing in..." : "Continue"}
+                    {loginSubmitting ? (isSignUp ? "Creating..." : "Signing in...") : (isSignUp ? "Create Account" : "Sign In")}
                   </button>
                   <button
-                    onClick={() => setShowEmailForm(false)}
+                    onClick={() => { setShowEmailForm(false); setLoginError(""); }}
                     className="px-4 py-2.5 rounded-lg transition-colors hover:bg-white/5"
                     style={{
                       fontFamily: "DM Mono, monospace",
@@ -352,7 +414,7 @@ export default function HomePage() {
                     border: "1px solid #E8C54720",
                   }}
                 >
-                  {p.myRole?.replace("_", " ")}
+                  {(p.myRoles || []).map((r: string) => r.replace(/_/g, " ")).join(", ")}
                 </span>
               </div>
 

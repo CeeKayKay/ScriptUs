@@ -24,7 +24,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [myRole, setMyRole] = useState<ProjectRole>("STAGE_MANAGER");
+  const [myRoles, setMyRoles] = useState<ProjectRole[]>(["STAGE_MANAGER"]);
 
   const {
     activeRole,
@@ -44,7 +44,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     projectId: params.id,
     userId: (session?.user as any)?.id || "anonymous",
     userName: session?.user?.name || "Anonymous",
-    userRole: myRole,
+    userRole: myRoles[0],
   });
 
   // Real-time document sync
@@ -78,7 +78,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
           customRoles: data.customRoles || [],
           customCueTypes: data.customCueTypes || [],
         });
-        setMyRole(data.myRole);
+        setMyRoles(data.myRoles || [data.myRole] || ["VIEWER"]);
         setLoading(false);
       })
       .catch((e) => {
@@ -135,7 +135,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       />
 
       {/* Role switcher tabs */}
-      <RoleSwitcher myRole={myRole} />
+      <RoleSwitcher myRoles={myRoles} />
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
@@ -187,7 +187,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       {isCueEditorOpen && <CueEditor projectId={params.id} broadcast={broadcast} />}
 
       {/* Settings modal */}
-      {isSettingsOpen && <Settings projectId={params.id} myRole={myRole} />}
+      {isSettingsOpen && <Settings projectId={params.id} myRoles={myRoles} />}
 
       {/* Footer status bar (hidden on mobile) */}
       {!isMobile && (

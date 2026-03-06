@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import GithubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 
 export const authOptions: NextAuthOptions = {
@@ -28,27 +29,51 @@ export const authOptions: NextAuthOptions = {
         ]
       : []),
 
-    // Email credentials provider (sign in or create account)
+    // Email + password credentials provider
     CredentialsProvider({
       name: "Email",
       credentials: {
         email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
         name: { label: "Name", type: "text" },
+        isSignUp: { label: "Sign Up", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
+        if (!credentials?.email || !credentials?.password) return null;
 
         const email = credentials.email.trim().toLowerCase();
-        const name = credentials.name?.trim() || email.split("@")[0];
+        const password = credentials.password;
+        const isSignUp = credentials.isSignUp === "true";
 
-        // Find or create user
-        const user = await prisma.user.upsert({
-          where: { email },
-          update: { name: credentials.name?.trim() ? name : undefined },
-          create: { email, name },
-        });
+        if (isSignUp) {
+          // Creating a new account
+          const existing = await prisma.user.findUnique({ where: { email } });
+          if (existing) {
+            throw new Error("An account with this email already exists. Please sign in.");
+          }
 
-        return { id: user.id, email: user.email, name: user.name };
+          const name = credentials.name?.trim() || email.split("@")[0];
+          const hash = await bcrypt.hash(password, 12);
+
+          const user = await prisma.user.create({
+            data: { email, name, password: hash },
+          });
+
+          return { id: user.id, email: user.email, name: user.name };
+        } else {
+          // Signing in
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (!user || !user.password) {
+            throw new Error("No account found with this email.");
+          }
+
+          const valid = await bcrypt.compare(password, user.password);
+          if (!valid) {
+            throw new Error("Incorrect password.");
+          }
+
+          return { id: user.id, email: user.email, name: user.name };
+        }
       },
     }),
   ],

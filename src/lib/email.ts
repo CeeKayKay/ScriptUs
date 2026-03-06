@@ -1,12 +1,14 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+function createTransporter(smtpUser?: string, smtpPass?: string) {
+  const user = smtpUser || process.env.SMTP_USER;
+  const pass = smtpPass || process.env.SMTP_PASS;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+}
 
 export async function sendInviteEmail({
   to,
@@ -14,17 +16,24 @@ export async function sendInviteEmail({
   role,
   inviterName,
   acceptUrl,
+  smtpUser,
+  smtpPass,
 }: {
   to: string;
   projectTitle: string;
   role: string;
   inviterName: string;
   acceptUrl: string;
+  smtpUser?: string;
+  smtpPass?: string;
 }) {
+  const transporter = createTransporter(smtpUser, smtpPass);
+  if (!transporter) throw new Error("No SMTP credentials configured");
+  const fromEmail = smtpUser || process.env.SMTP_USER;
   const roleLabel = role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   await transporter.sendMail({
-    from: `"ScriptUs" <${process.env.SMTP_USER}>`,
+    from: `"ScriptUs" <${fromEmail}>`,
     to,
     subject: `You've been invited to "${projectTitle}" on ScriptUs`,
     html: `
