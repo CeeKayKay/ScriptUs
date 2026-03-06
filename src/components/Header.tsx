@@ -123,9 +123,9 @@ export function Header({ connected, synced }: HeaderProps) {
         )}
 
         <div className="flex -space-x-1.5">
-          {onlineUsers.slice(0, isMobile ? 3 : 6).map((user) => (
+          {onlineUsers.slice(0, isMobile ? 3 : 6).map((user, i) => (
             <div
-              key={user.userId}
+              key={`${user.userId}-${i}`}
               data-tooltip={`${user.name} (${user.role.replace("_", " ")})`}
               className="rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ring-[#1a1916]"
               style={{

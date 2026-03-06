@@ -50,10 +50,23 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   const [number, setNumber] = useState(editingCue?.number || getNextNumber(initialType));
   const [note, setNote] = useState(editingCue?.note || "");
   const [status, setStatus] = useState<CueStatus>(editingCue?.status || "DRAFT");
+  const [scriptRef, setScriptRef] = useState(editingCue?.scriptRef || newCueSelectedText || "");
   const [duration, setDuration] = useState(editingCue?.duration || 0);
   const [preWait, setPreWait] = useState(editingCue?.preWait || 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Find the full line text for context when editing
+  const lineText = (() => {
+    const lineId = editingCue?.lineId || newCueLineId;
+    if (!lineId) return null;
+    for (const scene of scenes) {
+      for (const line of scene.lines) {
+        if (line.id === lineId) return line.text;
+      }
+    }
+    return null;
+  })();
 
   // Auto-generate label from type and number
   useEffect(() => {
@@ -89,7 +102,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         status,
         duration: duration || null,
         preWait: preWait || null,
-        ...(!isEditing && newCueSelectedText && { scriptRef: newCueSelectedText }),
+        scriptRef: scriptRef.trim() || null,
       };
 
       const res = await fetch("/api/cues", {
@@ -114,6 +127,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
           number: savedCue.number,
           note: savedCue.note,
           status: savedCue.status,
+          scriptRef: savedCue.scriptRef,
           duration: savedCue.duration,
           preWait: savedCue.preWait,
           followTime: savedCue.followTime,
@@ -254,36 +268,119 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
             </div>
           )}
 
-          {/* Script reference */}
-          {(newCueSelectedText || editingCue?.scriptRef) && (
+          {/* Script reference (editable) */}
+          {(scriptRef || lineText) && (
             <div>
-              <label
-                className="block mb-1.5"
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 20,
-                  color: "#888",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Script Reference
-              </label>
-              <div
-                className="px-3 py-2.5 rounded"
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: isMobile ? 10 : 20,
+                    color: "#888",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Highlighted Text
+                </label>
+                {scriptRef && (
+                  <button
+                    onClick={() => setScriptRef("")}
+                    className="px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 10,
+                      color: "#888",
+                      border: "1px solid #333",
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Show full line text for context with selectable highlight */}
+              {lineText && (
+                <div className="mb-2">
+                  <div
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 9,
+                      color: "#555",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Full line (select text to update highlight)
+                  </div>
+                  <div
+                    className="px-3 py-2 rounded"
+                    style={{
+                      fontFamily: "Libre Baskerville, serif",
+                      fontSize: isMobile ? 14 : 16,
+                      lineHeight: 1.6,
+                      color: "#a09888",
+                      background: "rgba(255,255,255,0.02)",
+                      border: "1px solid #2a2720",
+                      whiteSpace: "pre-wrap",
+                      cursor: "text",
+                      userSelect: "text",
+                    }}
+                    onMouseUp={() => {
+                      const sel = window.getSelection();
+                      if (sel && !sel.isCollapsed) {
+                        const selected = sel.toString().trim();
+                        if (selected && lineText.includes(selected)) {
+                          setScriptRef(selected);
+                        }
+                      }
+                    }}
+                  >
+                    {scriptRef && lineText.includes(scriptRef) ? (
+                      (() => {
+                        const idx = lineText.indexOf(scriptRef);
+                        return (
+                          <>
+                            {lineText.slice(0, idx)}
+                            <span style={{
+                              background: `${CUE_TYPES[type]?.color || "#E8C547"}20`,
+                              borderBottom: `2px solid ${CUE_TYPES[type]?.color || "#E8C547"}`,
+                              color: CUE_TYPES[type]?.color || "#E8C547",
+                              borderRadius: 2,
+                              padding: "1px 0",
+                            }}>
+                              {scriptRef}
+                            </span>
+                            {lineText.slice(idx + scriptRef.length)}
+                          </>
+                        );
+                      })()
+                    ) : (
+                      lineText
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Direct edit field for the highlight text */}
+              <textarea
+                value={scriptRef}
+                onChange={(e) => setScriptRef(e.target.value)}
+                rows={2}
+                placeholder="Type or select text from the line above"
+                className="w-full px-3 py-2 rounded resize-none"
                 style={{
                   fontFamily: "Libre Baskerville, serif",
-                  fontSize: 28,
+                  fontSize: isMobile ? 14 : 16,
                   lineHeight: 1.6,
-                  color: "#e0ddd5",
                   background: "rgba(232, 197, 71, 0.04)",
                   border: "1px solid rgba(232, 197, 71, 0.15)",
-                  borderLeft: "3px solid #E8C54780",
-                  whiteSpace: "pre-wrap",
+                  borderLeft: `3px solid ${CUE_TYPES[type]?.color || "#E8C547"}80`,
+                  color: "#e0ddd5",
+                  outline: "none",
                 }}
-              >
-                {newCueSelectedText || editingCue?.scriptRef}
-              </div>
+              />
             </div>
           )}
 

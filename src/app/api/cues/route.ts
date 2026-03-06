@@ -115,6 +115,7 @@ export async function PATCH(req: NextRequest) {
       ...(body.duration !== undefined && { duration: body.duration }),
       ...(body.preWait !== undefined && { preWait: body.preWait }),
       ...(body.followTime !== undefined && { followTime: body.followTime }),
+      ...(body.scriptRef !== undefined && { scriptRef: body.scriptRef || null }),
       ...(body.lineId !== undefined && { lineId: body.lineId }),
       updatedById: userId,
     },
