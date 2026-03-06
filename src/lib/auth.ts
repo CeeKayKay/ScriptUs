@@ -28,24 +28,24 @@ export const authOptions: NextAuthOptions = {
         ]
       : []),
 
-    // Demo/dev credentials provider
+    // Email credentials provider (sign in or create account)
     CredentialsProvider({
-      name: "Demo Login",
+      name: "Email",
       credentials: {
         email: { label: "Email", type: "email" },
-        role: { label: "Role", type: "text" },
+        name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email) return null;
 
-        // In demo mode, auto-create or find user
+        const email = credentials.email.trim().toLowerCase();
+        const name = credentials.name?.trim() || email.split("@")[0];
+
+        // Find or create user
         const user = await prisma.user.upsert({
-          where: { email: credentials.email },
-          update: {},
-          create: {
-            email: credentials.email,
-            name: credentials.email.split("@")[0],
-          },
+          where: { email },
+          update: { name: credentials.name?.trim() ? name : undefined },
+          create: { email, name },
         });
 
         return { id: user.id, email: user.email, name: user.name };

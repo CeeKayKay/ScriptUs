@@ -34,6 +34,12 @@ export default function HomePage() {
     }
   }, [status]);
 
+  // --- Login form state ---
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginName, setLoginName] = useState("");
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+
   // Not logged in — show landing
   if (status === "unauthenticated") {
     return (
@@ -57,7 +63,7 @@ export default function HomePage() {
           <div className="space-y-3">
             <button
               onClick={() => signIn("google")}
-              className="w-full px-6 py-3 rounded-lg border transition-colors"
+              className="w-full px-6 py-3 rounded-lg border transition-colors hover:bg-white/3"
               style={{
                 fontFamily: "DM Mono, monospace",
                 fontSize: 13,
@@ -68,32 +74,153 @@ export default function HomePage() {
             >
               Sign in with Google
             </button>
-            <button
-              onClick={() =>
-                signIn("credentials", {
-                  email: "sm@scriptus.dev",
-                  role: "STAGE_MANAGER",
-                })
-              }
-              className="w-full px-6 py-3 rounded-lg border transition-colors"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: 13,
-                background: "#E8C54710",
-                borderColor: "#E8C54730",
-                color: "#E8C547",
-              }}
-            >
-              Demo Login (Stage Manager)
-            </button>
-          </div>
 
-          <p
-            className="mt-6 text-xs"
-            style={{ fontFamily: "DM Mono, monospace", color: "#555" }}
-          >
-            Run `npm run db:seed` to populate demo data
-          </p>
+            <div
+              className="flex items-center gap-3 my-4"
+              style={{ color: "#444" }}
+            >
+              <div className="flex-1 h-px" style={{ background: "#2a2720" }} />
+              <span style={{ fontFamily: "DM Mono, monospace", fontSize: 11 }}>or</span>
+              <div className="flex-1 h-px" style={{ background: "#2a2720" }} />
+            </div>
+
+            {!showEmailForm ? (
+              <button
+                onClick={() => setShowEmailForm(true)}
+                className="w-full px-6 py-3 rounded-lg border transition-colors hover:bg-white/3"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 13,
+                  background: "#1a1916",
+                  borderColor: "#2a2720",
+                  color: "#e0ddd5",
+                }}
+              >
+                Sign in / Create Account with Email
+              </button>
+            ) : (
+              <div
+                className="p-5 rounded-xl space-y-3 text-left"
+                style={{ background: "#1a1916", border: "1px solid #2a2720" }}
+              >
+                <div>
+                  <label
+                    className="block mb-1.5"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 10,
+                      color: "#888",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="w-full px-4 py-2.5 rounded-lg outline-none"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      background: "#13120f",
+                      border: "1px solid #2a2720",
+                      color: "#e0ddd5",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && loginEmail.trim()) {
+                        e.preventDefault();
+                        setLoginSubmitting(true);
+                        signIn("credentials", {
+                          email: loginEmail.trim(),
+                          name: loginName.trim() || undefined,
+                        });
+                      }
+                    }}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-1.5"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 10,
+                      color: "#888",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Name <span style={{ color: "#555" }}>(for new accounts)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={loginName}
+                    onChange={(e) => setLoginName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full px-4 py-2.5 rounded-lg outline-none"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      background: "#13120f",
+                      border: "1px solid #2a2720",
+                      color: "#e0ddd5",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && loginEmail.trim()) {
+                        e.preventDefault();
+                        setLoginSubmitting(true);
+                        signIn("credentials", {
+                          email: loginEmail.trim(),
+                          name: loginName.trim() || undefined,
+                        });
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      if (!loginEmail.trim()) return;
+                      setLoginSubmitting(true);
+                      signIn("credentials", {
+                        email: loginEmail.trim(),
+                        name: loginName.trim() || undefined,
+                      });
+                    }}
+                    disabled={loginSubmitting || !loginEmail.trim()}
+                    className="flex-1 px-5 py-2.5 rounded-lg transition-colors"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      background: "#E8C54715",
+                      border: "1px solid #E8C54740",
+                      color: "#E8C547",
+                      opacity: loginSubmitting || !loginEmail.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {loginSubmitting ? "Signing in..." : "Continue"}
+                  </button>
+                  <button
+                    onClick={() => setShowEmailForm(false)}
+                    className="px-4 py-2.5 rounded-lg transition-colors hover:bg-white/5"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      color: "#888",
+                      border: "1px solid #333",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
