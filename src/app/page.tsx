@@ -262,20 +262,6 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <button
-            onClick={handleDeleteAccount}
-            disabled={deleting}
-            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors hover:bg-red-500/10"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: 12,
-              border: "1px solid rgba(232, 71, 71, 0.3)",
-              color: "#E84747",
-              opacity: deleting ? 0.5 : 1,
-            }}
-          >
-            {deleting ? "Deleting..." : "Delete Account"}
-          </button>
-          <button
             onClick={() => signOut()}
             className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors"
             style={{
@@ -399,6 +385,24 @@ export default function HomePage() {
           ))}
         </div>
       )}
+
+      {/* Delete account */}
+      <div className="flex justify-end mt-12 mb-4">
+        <button
+          onClick={handleDeleteAccount}
+          disabled={deleting}
+          className="px-3 py-2 rounded-lg transition-colors hover:bg-red-500/10"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            border: "1px solid rgba(232, 71, 71, 0.2)",
+            color: "#E84747",
+            opacity: deleting ? 0.5 : 0.6,
+          }}
+        >
+          {deleting ? "Deleting..." : "Delete Account"}
+        </button>
+      </div>
     </div>
   );
 }
