@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPE_LIST } from "@/lib/cue-types";
@@ -958,9 +959,21 @@ export function Settings({ projectId, myRole }: SettingsProps) {
 
         {/* Footer */}
         <div
-          className="flex items-center justify-end px-6 py-3 flex-shrink-0"
+          className="flex items-center justify-between px-6 py-3 flex-shrink-0"
           style={{ borderTop: "1px solid #2a2720" }}
         >
+          <button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            className="px-4 py-2 rounded transition-colors hover:bg-red-500/10"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 12,
+              color: "#E87847",
+              border: "1px solid rgba(232, 120, 71, 0.3)",
+            }}
+          >
+            Sign Out
+          </button>
           <button
             onClick={closeSettings}
             className="px-4 py-2 rounded transition-colors hover:bg-white/5"

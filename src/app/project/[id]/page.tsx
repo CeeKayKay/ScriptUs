@@ -152,32 +152,34 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       {/* Mobile: Cue panel overlay */}
       {isMobile && showSidePanel && <CueSidePanel />}
 
-      {/* Mobile: Floating cue panel toggle */}
-      {isMobile && roleConfig.hasCuePanel && !showSidePanel && (
+      {/* Floating cue panel toggle (shown when panel is closed) */}
+      {roleConfig.hasCuePanel && !showSidePanel && (
         <button
           onClick={toggleCuePanel}
           style={{
             position: "fixed",
-            bottom: 20,
-            right: 16,
+            bottom: isMobile ? 20 : 24,
+            right: isMobile ? 16 : 24,
             zIndex: 30,
-            width: 48,
-            height: 48,
-            borderRadius: "50%",
+            height: isMobile ? 48 : 40,
+            borderRadius: isMobile ? "50%" : 8,
             background: roleConfig.color + "20",
             border: `2px solid ${roleConfig.color}60`,
             color: roleConfig.color,
             fontFamily: "DM Mono, monospace",
-            fontSize: 11,
+            fontSize: isMobile ? 11 : 12,
             fontWeight: 700,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+            padding: isMobile ? undefined : "0 14px",
+            width: isMobile ? 48 : "auto",
+            gap: 6,
           }}
           title="Open Cue Sheet"
         >
-          CUE
+          {roleConfig.icon} {isMobile ? "CUE" : "Cue Sheet"}
         </button>
       )}
 
