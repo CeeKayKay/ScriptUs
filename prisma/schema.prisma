@@ -65,6 +65,7 @@ model User {
   createdCues   Cue[]           @relation("CueCreatedBy")
   updatedCues   Cue[]           @relation("CueUpdatedBy")
   comments      Comment[]
+  sentInvites   Invite[]        @relation("InviteSentBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -85,6 +86,7 @@ model Project {
   scenes         Scene[]
   cues           Cue[]
   comments       Comment[]
+  invites        Invite[]
   customRoles    CustomRole[]
   customCueTypes CustomCueType[]
 
@@ -154,8 +156,9 @@ model ScriptLine {
   text      String   @db.Text
   sortOrder Int
 
-  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
-  cues  Cue[]
+  scene    Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  cues     Cue[]
+  comments Comment[]
 
   @@index([sceneId, sortOrder])
 }
@@ -260,17 +263,50 @@ model Comment {
   id        String  @id @default(cuid())
   projectId String
   cueId     String?
+  lineId    String? // Script line this comment is attached to
+  scriptRef String? @db.Text // The highlighted text snippet
   userId    String
   text      String  @db.Text
+  role      String? // Role of the commenter at time of comment
   resolved  Boolean @default(false)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  cue     Cue?    @relation(fields: [cueId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cue     Cue?        @relation(fields: [cueId], references: [id], onDelete: Cascade)
+  line    ScriptLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
   @@index([cueId])
+  @@index([lineId])
+}
+
+// ---- Invitations ----
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+model Invite {
+  id        String       @id @default(cuid())
+  projectId String
+  email     String
+  role      ProjectRole
+  token     String       @unique @default(cuid())
+  status    InviteStatus @default(PENDING)
+  sentById  String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sentBy  User    @relation("InviteSentBy", fields: [sentById], references: [id])
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([projectId])
+  @@index([token])
+  @@unique([projectId, email])
 }

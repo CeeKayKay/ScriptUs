@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberView, CustomRoleView, CustomCueTypeView, CueStatus } from "@/types";
+import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberView, CustomRoleView, CustomCueTypeView, CueStatus, CommentView } from "@/types";
 
 type CuePanelSide = "left" | "right";
 
@@ -70,6 +70,11 @@ interface StageStore {
   updateLine: (sceneId: string, lineId: string, updates: Partial<ScriptLineView>) => void;
   deleteLine: (sceneId: string, lineId: string) => void;
   deleteScene: (sceneId: string) => void;
+
+  // Comments
+  addComment: (lineId: string, comment: CommentView) => void;
+  resolveComment: (commentId: string) => void;
+  removeComment: (commentId: string) => void;
 
   // Search/filter
   searchQuery: string;
@@ -292,6 +297,40 @@ export const useStageStore = create<StageStore>((set) => ({
   deleteScene: (sceneId) =>
     set((s) => ({
       scenes: s.scenes.filter((sc) => sc.id !== sceneId),
+    })),
+
+  addComment: (lineId, comment) =>
+    set((s) => ({
+      scenes: s.scenes.map((sc) => ({
+        ...sc,
+        lines: sc.lines.map((l) =>
+          l.id === lineId
+            ? { ...l, comments: [...(l.comments || []), comment] }
+            : l
+        ),
+      })),
+    })),
+  resolveComment: (commentId) =>
+    set((s) => ({
+      scenes: s.scenes.map((sc) => ({
+        ...sc,
+        lines: sc.lines.map((l) => ({
+          ...l,
+          comments: (l.comments || []).map((c) =>
+            c.id === commentId ? { ...c, resolved: true } : c
+          ),
+        })),
+      })),
+    })),
+  removeComment: (commentId) =>
+    set((s) => ({
+      scenes: s.scenes.map((sc) => ({
+        ...sc,
+        lines: sc.lines.map((l) => ({
+          ...l,
+          comments: (l.comments || []).filter((c) => c.id !== commentId),
+        })),
+      })),
     })),
 
   searchQuery: "",

@@ -5,7 +5,7 @@ import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
-import type { CueView, ScriptLineView, LineType } from "@/types";
+import type { CueView, ScriptLineView, CommentView, LineType } from "@/types";
 
 const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
   { value: "DIALOGUE", label: "Dialogue" },
@@ -16,12 +16,13 @@ const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
 
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
+  projectId?: string;
 }
 
-export function ScriptView({ broadcast }: ScriptViewProps) {
+export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewProps) {
   const {
     activeRole,
-    projectId,
+    projectId: storeProjectId,
     scenes,
     activeCueId,
     setActiveCueId,
@@ -34,7 +35,12 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
     deleteLine,
     deleteScene,
     scriptTextSize,
+    addComment,
+    resolveComment,
+    removeComment,
   } = useStageStore();
+
+  const projectId = projectIdProp || storeProjectId;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -178,6 +184,75 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
       broadcast?.({ type: "line-typing", lineId, field, value });
     },
     [broadcast]
+  );
+
+  // --- Comment state ---
+  const [commentingLine, setCommentingLine] = useState<string | null>(null);
+  const [commentSelectedText, setCommentSelectedText] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentSaving, setCommentSaving] = useState(false);
+
+  const handleAddComment = useCallback(
+    (lineId: string, selectedText?: string) => {
+      setCommentingLine(lineId);
+      setCommentSelectedText(selectedText || null);
+      setCommentText("");
+    },
+    []
+  );
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !commentingLine || !projectId) return;
+    setCommentSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lineId: commentingLine,
+          scriptRef: commentSelectedText,
+          text: commentText.trim(),
+          role: activeRole,
+        }),
+      });
+      if (res.ok) {
+        const comment = await res.json();
+        addComment(commentingLine, comment);
+        setCommentingLine(null);
+        setCommentText("");
+        setCommentSelectedText(null);
+      }
+    } catch {} finally {
+      setCommentSaving(false);
+    }
+  };
+
+  const handleResolveComment = useCallback(
+    async (commentId: string) => {
+      if (!projectId) return;
+      resolveComment(commentId);
+      try {
+        await fetch(`/api/projects/${projectId}/comments`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ commentId, resolved: true }),
+        });
+      } catch {}
+    },
+    [projectId, resolveComment]
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      if (!projectId) return;
+      removeComment(commentId);
+      try {
+        await fetch(`/api/projects/${projectId}/comments?commentId=${commentId}`, {
+          method: "DELETE",
+        });
+      } catch {}
+    },
+    [projectId, removeComment]
   );
 
   const handleCreateScene = async () => {
@@ -399,6 +474,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                 activeRole={activeRole}
                 onCueClick={handleCueClick}
                 onAddCue={handleAddCue}
+                onAddComment={handleAddComment}
                 showAddButton={canAddCues}
                 canEdit={canWrite}
                 scriptTextSize={scriptTextSize}
@@ -407,7 +483,101 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                 onEditSceneTitle={handleEditSceneTitle}
                 onDeleteScene={handleDeleteScene}
                 onTyping={handleTyping}
+                onResolveComment={handleResolveComment}
+                onDeleteComment={handleDeleteComment}
               />
+
+              {/* Inline comment form */}
+              {commentingLine === line.id && (
+                <div
+                  className="ml-4 mt-1 mb-2 p-3 rounded-lg"
+                  style={{
+                    background: "rgba(71, 184, 232, 0.05)",
+                    border: "1px solid rgba(71, 184, 232, 0.2)",
+                  }}
+                >
+                  {commentSelectedText && (
+                    <div
+                      className="mb-2 px-2 py-1 rounded"
+                      style={{
+                        fontFamily: "Libre Baskerville, serif",
+                        fontSize: 12,
+                        color: "#888",
+                        fontStyle: "italic",
+                        background: "rgba(255,255,255,0.03)",
+                        borderLeft: "2px solid #47B8E8",
+                      }}
+                    >
+                      &ldquo;{commentSelectedText}&rdquo;
+                    </div>
+                  )}
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Add a comment..."
+                    rows={2}
+                    className="w-full px-3 py-2 rounded resize-none"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      background: "#13120f",
+                      border: "1px solid #2a2720",
+                      color: "#e0ddd5",
+                      outline: "none",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        handleSubmitComment();
+                      }
+                      if (e.key === "Escape") {
+                        setCommentingLine(null);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleSubmitComment}
+                      disabled={commentSaving || !commentText.trim()}
+                      className="px-3 py-1.5 rounded transition-colors"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#47B8E8",
+                        background: "rgba(71, 184, 232, 0.1)",
+                        border: "1px solid rgba(71, 184, 232, 0.3)",
+                        opacity: commentSaving || !commentText.trim() ? 0.5 : 1,
+                      }}
+                    >
+                      {commentSaving ? "Posting..." : "Comment"}
+                    </button>
+                    <button
+                      onClick={() => setCommentingLine(null)}
+                      className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 11,
+                        color: "#888",
+                        border: "1px solid #333",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <span
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 10,
+                        color: "#555",
+                        alignSelf: "center",
+                      }}
+                    >
+                      Ctrl+Enter to submit
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Add line button at end of each scene */}
               {isSceneEnd && endSceneId && canWrite && (

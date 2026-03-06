@@ -69,19 +69,6 @@ export default function HomePage() {
               Sign in with Google
             </button>
             <button
-              onClick={() => signIn("github")}
-              className="w-full px-6 py-3 rounded-lg border transition-colors"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: 13,
-                background: "#1a1916",
-                borderColor: "#2a2720",
-                color: "#e0ddd5",
-              }}
-            >
-              Sign in with GitHub
-            </button>
-            <button
               onClick={() =>
                 signIn("credentials", {
                   email: "sm@scriptus.dev",

@@ -4,7 +4,7 @@ import { forwardRef, useRef, useCallback, useState, useEffect } from "react";
 import { CueBadge } from "./CueBadge";
 import { CUE_TYPES } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { ScriptLineView, CueType, CueView, LineType, ProjectRole } from "@/types";
+import type { ScriptLineView, CueType, CueView, CommentView, LineType, ProjectRole } from "@/types";
 
 interface ScriptLineProps {
   line: ScriptLineView;
@@ -13,6 +13,7 @@ interface ScriptLineProps {
   activeRole: ProjectRole;
   onCueClick: (cue: CueView) => void;
   onAddCue?: (lineId: string, selectedText?: string) => void;
+  onAddComment?: (lineId: string, selectedText?: string) => void;
   showAddButton?: boolean;
   canEdit?: boolean;
   scriptTextSize?: number;
@@ -21,6 +22,8 @@ interface ScriptLineProps {
   onEditSceneTitle?: (sceneId: string, title: string) => void;
   onDeleteScene?: (sceneId: string) => void;
   onTyping?: (lineId: string, field: "text" | "character" | "title", value: string) => void;
+  onResolveComment?: (commentId: string) => void;
+  onDeleteComment?: (commentId: string) => void;
 }
 
 // ---- Text with inline cue highlights and badges above highlighted text ----
@@ -91,6 +94,7 @@ function CuedText({
   activeRole,
   lineId,
   onAddCue,
+  onAddComment,
   showAddButton,
 }: {
   text: string;
@@ -102,6 +106,7 @@ function CuedText({
   activeRole?: ProjectRole;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
+  onAddComment?: (lineId: string, selectedText?: string) => void;
   showAddButton?: boolean;
 }) {
   const elRef = useRef<HTMLElement>(null);
@@ -147,7 +152,7 @@ function CuedText({
 
   return (
     <span style={{ position: "relative", display: Tag === "div" ? "block" : "inline" }}>
-      <CuePopup show={hasSelection} pos={popupPos} cueLabel={cueLabel} lineId={lineId} onAddCue={onAddCue} />
+      <SelectionPopup show={hasSelection} pos={popupPos} cueLabel={cueLabel} lineId={lineId} onAddCue={onAddCue} onAddComment={onAddComment} />
       <Tag ref={elRef as any} style={style}>
         {segments.map((seg, i) => {
           if (!seg.cue || !seg.color) {
@@ -214,6 +219,147 @@ function CuedText({
   );
 }
 
+// ---- Comment thread display ----
+
+function CommentThread({
+  comments,
+  onResolve,
+  onDelete,
+  isMobile,
+}: {
+  comments: CommentView[];
+  onResolve?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  isMobile: boolean;
+}) {
+  const unresolvedComments = comments.filter((c) => !c.resolved);
+  const [expanded, setExpanded] = useState(false);
+
+  if (unresolvedComments.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginLeft: isMobile ? 0 : 16,
+        borderLeft: "2px solid rgba(71, 184, 232, 0.3)",
+        paddingLeft: 10,
+      }}
+    >
+      {(expanded ? unresolvedComments : unresolvedComments.slice(0, 2)).map((c) => (
+        <div
+          key={c.id}
+          className="group/comment"
+          style={{
+            padding: "4px 0",
+            borderBottom: "1px solid rgba(255,255,255,0.03)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              style={{
+                fontFamily: "DM Mono, monospace",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#47B8E8",
+              }}
+            >
+              {c.user.name}
+            </span>
+            {c.role && (
+              <span
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 9,
+                  color: "#666",
+                  padding: "0 4px",
+                  border: "1px solid #333",
+                  borderRadius: 3,
+                }}
+              >
+                {c.role.replace(/_/g, " ")}
+              </span>
+            )}
+            {c.scriptRef && (
+              <span
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 9,
+                  color: "#888",
+                  fontStyle: "italic",
+                }}
+              >
+                &ldquo;{c.scriptRef.slice(0, 30)}{c.scriptRef.length > 30 ? "..." : ""}&rdquo;
+              </span>
+            )}
+            <div className="flex gap-1 ml-auto opacity-0 group-hover/comment:opacity-100 transition-opacity">
+              {onResolve && (
+                <button
+                  onClick={() => onResolve(c.id)}
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 9,
+                    color: "#47E86A",
+                    border: "1px solid rgba(71, 232, 106, 0.3)",
+                    borderRadius: 3,
+                    padding: "1px 6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✓
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(c.id)}
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 9,
+                    color: "#E84747",
+                    border: "1px solid rgba(232, 71, 71, 0.3)",
+                    borderRadius: 3,
+                    padding: "1px 6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+          <div
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 11,
+              color: "#c8c0b0",
+              lineHeight: 1.5,
+              marginTop: 2,
+            }}
+          >
+            {c.text}
+          </div>
+        </div>
+      ))}
+      {unresolvedComments.length > 2 && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 10,
+            color: "#47B8E8",
+            cursor: "pointer",
+            padding: "2px 0",
+            background: "none",
+            border: "none",
+          }}
+        >
+          + {unresolvedComments.length - 2} more comment{unresolvedComments.length - 2 > 1 ? "s" : ""}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
   function ScriptLine(
     {
@@ -223,6 +369,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
       activeRole,
       onCueClick,
       onAddCue,
+      onAddComment,
       showAddButton,
       canEdit,
       scriptTextSize = 20,
@@ -231,6 +378,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
       onEditSceneTitle,
       onDeleteScene,
       onTyping,
+      onResolveComment,
+      onDeleteComment,
     },
     ref
   ) {
@@ -371,6 +520,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   activeRole={activeRole}
                   lineId={line.id}
                   onAddCue={onAddCue}
+                  onAddComment={onAddComment}
                   showAddButton={showAddButton}
                   onSave={(newText) => {
                     if (newText.trim() && newText !== line.text) {
@@ -397,6 +547,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   activeRole={showAddButton ? activeRole : undefined}
                   lineId={line.id}
                   onAddCue={onAddCue}
+                  onAddComment={onAddComment}
                   showAddButton={showAddButton}
                 />
               )}
@@ -417,6 +568,14 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
               </button>
             )}
           </div>
+          {line.comments && line.comments.length > 0 && (
+            <CommentThread
+              comments={line.comments}
+              onResolve={onResolveComment}
+              onDelete={onDeleteComment}
+              isMobile={isMobile}
+            />
+          )}
         </div>
       );
     }
@@ -514,6 +673,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     activeRole={activeRole}
                     lineId={line.id}
                     onAddCue={onAddCue}
+                    onAddComment={onAddComment}
                     showAddButton={showAddButton}
                     onSave={(newText) => {
                       if (newText.trim() && newText !== line.text) {
@@ -539,6 +699,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     activeRole={showAddButton ? activeRole : undefined}
                     lineId={line.id}
                     onAddCue={onAddCue}
+                    onAddComment={onAddComment}
                     showAddButton={showAddButton}
                   />
                 )}
@@ -559,6 +720,14 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                 </button>
               )}
             </div>
+            {line.comments && line.comments.length > 0 && (
+              <CommentThread
+                comments={line.comments}
+                onResolve={onResolveComment}
+                onDelete={onDeleteComment}
+                isMobile={isMobile}
+              />
+            )}
           </div>
         </div>
       );
@@ -582,6 +751,7 @@ function EditableCuedText({
   activeRole,
   lineId,
   onAddCue,
+  onAddComment,
   showAddButton,
   onSave,
   onTyping,
@@ -597,6 +767,7 @@ function EditableCuedText({
   activeRole?: ProjectRole;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
+  onAddComment?: (lineId: string, selectedText?: string) => void;
   showAddButton?: boolean;
   onSave: (newText: string) => void;
   onTyping?: (value: string) => void;
@@ -615,6 +786,7 @@ function EditableCuedText({
         activeRole={activeRole}
         lineId={lineId}
         onAddCue={onAddCue}
+        onAddComment={onAddComment}
         onTyping={onTyping}
         autoFocus
         clickPos={clickPosRef.current}
@@ -645,6 +817,7 @@ function EditableCuedText({
         activeRole={showAddButton ? activeRole : undefined}
         lineId={lineId}
         onAddCue={onAddCue}
+        onAddComment={onAddComment}
         showAddButton={showAddButton}
       />
     </span>
@@ -689,6 +862,7 @@ function EditableText({
   activeRole,
   lineId,
   onAddCue,
+  onAddComment,
 }: {
   text: string;
   tag?: "span" | "div";
@@ -704,6 +878,7 @@ function EditableText({
   activeRole?: ProjectRole;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
+  onAddComment?: (lineId: string, selectedText?: string) => void;
 }) {
   const elRef = useRef<HTMLElement>(null);
   const originalRef = useRef(text);
@@ -879,7 +1054,7 @@ function EditableText({
 
   return (
     <span style={{ position: "relative", display: Tag === "div" ? "block" : "inline" }}>
-      <CuePopup show={!!(showToolbar && showCueButton)} pos={toolbarPos} cueLabel={cueLabel} lineId={lineId} onAddCue={onAddCue} />
+      <SelectionPopup show={!!(showToolbar && (showCueButton || (hasSelection && lineId && onAddComment)))} pos={toolbarPos} cueLabel={cueLabel} lineId={lineId} onAddCue={onAddCue} onAddComment={onAddComment} />
       <Tag
         ref={elRef as any}
         contentEditable
@@ -903,53 +1078,84 @@ function EditableText({
   );
 }
 
-// ---- Cue popup button (shared between EditableText and CuedText) ----
+// ---- Selection popup (shared between EditableText and CuedText) ----
 
-function CuePopup({ show, pos, cueLabel, lineId, onAddCue }: {
+function SelectionPopup({ show, pos, cueLabel, lineId, onAddCue, onAddComment }: {
   show: boolean;
   pos: { x: number; y: number } | null;
   cueLabel: { label: string; color: string } | null;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
+  onAddComment?: (lineId: string, selectedText?: string) => void;
 }) {
-  if (!show || !pos || !cueLabel || !lineId || !onAddCue) return null;
+  if (!show || !pos || !lineId) return null;
+  const hasCue = cueLabel && onAddCue;
+  const hasComment = onAddComment;
+  if (!hasCue && !hasComment) return null;
+
   return (
     <div
       data-format-toolbar
       style={{
         position: "absolute",
         top: pos.y,
-        left: Math.max(0, pos.x - 40),
+        left: Math.max(0, pos.x - 60),
         zIndex: 20,
         background: "#1a1916",
-        border: `1px solid ${cueLabel.color}40`,
+        border: "1px solid #2a2720",
         borderRadius: 5,
         padding: "3px 4px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
         transition: "top 0.1s ease, left 0.1s ease",
+        display: "flex",
+        gap: 3,
       }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <button
-        style={{
-          fontFamily: "DM Mono, monospace",
-          fontSize: 12,
-          fontWeight: 600,
-          color: cueLabel.color,
-          background: `${cueLabel.color}15`,
-          border: `1px solid ${cueLabel.color}40`,
-          borderRadius: 3,
-          padding: "3px 10px",
-          cursor: "pointer",
-          lineHeight: 1.4,
-        }}
-        onClick={() => {
-          const selectedText = window.getSelection()?.toString().trim();
-          onAddCue(lineId, selectedText);
-        }}
-      >
-        {cueLabel.label}
-      </button>
+      {hasCue && (
+        <button
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 12,
+            fontWeight: 600,
+            color: cueLabel.color,
+            background: `${cueLabel.color}15`,
+            border: `1px solid ${cueLabel.color}40`,
+            borderRadius: 3,
+            padding: "3px 10px",
+            cursor: "pointer",
+            lineHeight: 1.4,
+          }}
+          onClick={() => {
+            const selectedText = window.getSelection()?.toString().trim();
+            onAddCue!(lineId, selectedText);
+          }}
+        >
+          {cueLabel.label}
+        </button>
+      )}
+      {hasComment && (
+        <button
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#47B8E8",
+            background: "rgba(71, 184, 232, 0.08)",
+            border: "1px solid rgba(71, 184, 232, 0.25)",
+            borderRadius: 3,
+            padding: "3px 10px",
+            cursor: "pointer",
+            lineHeight: 1.4,
+          }}
+          onClick={() => {
+            const selectedText = window.getSelection()?.toString().trim();
+            onAddComment!(lineId, selectedText);
+          }}
+        >
+          + comment
+        </button>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signOut } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
@@ -13,7 +13,9 @@ interface SettingsProps {
   myRole: ProjectRole;
 }
 
-type SettingsTab = "preferences" | "roles" | "cue-types";
+import type { InviteView } from "@/types";
+
+type SettingsTab = "preferences" | "team" | "roles" | "cue-types";
 
 const ADMIN_ROLES: ProjectRole[] = ["STAGE_MANAGER", "DIRECTOR"];
 
@@ -50,6 +52,7 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     setScriptTextSize,
     customRoles,
     customCueTypes,
+    members,
   } = useStageStore();
 
   const isAdmin = ADMIN_ROLES.includes(myRole);
@@ -70,6 +73,15 @@ export function Settings({ projectId, myRole }: SettingsProps) {
   const [newCueRole, setNewCueRole] = useState("");
   const [cueSaving, setCueSaving] = useState(false);
   const [cueError, setCueError] = useState<string | null>(null);
+
+  // --- Invite state ---
+  const [invites, setInvites] = useState<InviteView[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<ProjectRole>("ACTOR");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [invitesLoaded, setInvitesLoaded] = useState(false);
 
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAddCueType, setShowAddCueType] = useState(false);
@@ -279,8 +291,74 @@ export function Settings({ projectId, myRole }: SettingsProps) {
     }
   };
 
+  // Load invites when team tab is opened
+  useEffect(() => {
+    if (activeTab !== "team" || !isAdmin || invitesLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/invites`);
+        if (res.ok) {
+          const data = await res.json();
+          setInvites(data.invites || []);
+        }
+      } catch {}
+      setInvitesLoaded(true);
+    })();
+  }, [activeTab, isAdmin, invitesLoaded, projectId]);
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteSending(true);
+    setInviteError(null);
+    setInviteSuccess(null);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send invite");
+      }
+
+      const invite = await res.json();
+      setInvites((prev) => [invite, ...prev]);
+      setInviteEmail("");
+      setInviteSuccess(`Invitation sent to ${invite.email}`);
+      setTimeout(() => setInviteSuccess(null), 4000);
+    } catch (e: any) {
+      setInviteError(e.message);
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    try {
+      await fetch(`/api/projects/${projectId}/invites?inviteId=${inviteId}`, {
+        method: "DELETE",
+      });
+      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    } catch {}
+  };
+
+  const handleUpdateMemberRole = async (memberId: string, role: ProjectRole) => {
+    try {
+      await fetch(`/api/projects/${projectId}/invites`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, role }),
+      });
+      window.location.reload();
+    } catch {}
+  };
+
   const tabs: { id: SettingsTab; label: string; adminOnly: boolean }[] = [
     { id: "preferences", label: "Preferences", adminOnly: false },
+    { id: "team", label: "Team", adminOnly: true },
     { id: "roles", label: "Roles", adminOnly: true },
     { id: "cue-types", label: "Cue Types", adminOnly: true },
   ];
@@ -497,6 +575,150 @@ export function Settings({ projectId, myRole }: SettingsProps) {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ===== TEAM TAB ===== */}
+          {activeTab === "team" && isAdmin && (
+            <div className="space-y-4">
+              <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#666" }}>
+                Manage team members and send invitations.
+              </p>
+
+              {/* Invite form */}
+              <div
+                className="p-4 rounded-lg space-y-3"
+                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #2a2720" }}
+              >
+                <div style={labelStyle}>Invite Collaborator</div>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="flex-1 px-3 py-2 rounded"
+                    style={inputStyle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSendInvite();
+                    }}
+                  />
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as ProjectRole)}
+                    className="px-2 py-2 rounded"
+                    style={inputStyle}
+                  >
+                    {ROLE_LIST.map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleSendInvite}
+                  disabled={inviteSending || !inviteEmail.trim()}
+                  className="px-4 py-2 rounded transition-colors"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#E8C547",
+                    background: "#E8C54715",
+                    border: "1px solid #E8C54740",
+                    opacity: inviteSending || !inviteEmail.trim() ? 0.5 : 1,
+                  }}
+                >
+                  {inviteSending ? "Sending..." : "Send Invite"}
+                </button>
+                {inviteError && (
+                  <div style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#E87847" }}>
+                    {inviteError}
+                  </div>
+                )}
+                {inviteSuccess && (
+                  <div style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "#47E86A" }}>
+                    {inviteSuccess}
+                  </div>
+                )}
+              </div>
+
+              {/* Current members */}
+              <div>
+                <div className="mb-2" style={labelStyle}>Members</div>
+                <div className="space-y-1.5">
+                  {members.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+                      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #222" }}
+                    >
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                        style={{
+                          background: "rgba(232,197,71,0.1)",
+                          border: "1px solid #E8C54740",
+                          color: "#E8C547",
+                          fontFamily: "DM Mono, monospace",
+                        }}
+                      >
+                        {(m.name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#e0ddd5", fontWeight: 600 }}>
+                          {m.name}
+                        </div>
+                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#666" }}>
+                          {m.email}
+                        </div>
+                      </div>
+                      <select
+                        value={m.role}
+                        onChange={(e) => handleUpdateMemberRole(m.id, e.target.value as ProjectRole)}
+                        className="px-2 py-1 rounded"
+                        style={{
+                          ...inputStyle,
+                          fontSize: 10,
+                          color: "#E8C547",
+                        }}
+                      >
+                        {ROLE_LIST.map((r) => (
+                          <option key={r.id} value={r.id}>{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pending invites */}
+              {invites.filter((i) => i.status === "PENDING").length > 0 && (
+                <div>
+                  <div className="mb-2" style={labelStyle}>Pending Invites</div>
+                  <div className="space-y-1.5">
+                    {invites.filter((i) => i.status === "PENDING").map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg group"
+                        style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed #2a2720" }}
+                      >
+                        <div style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "#888", flex: 1 }}>
+                          {inv.email}
+                        </div>
+                        <span style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#E8C547" }}>
+                          {inv.role.replace(/_/g, " ")}
+                        </span>
+                        <button
+                          onClick={() => handleRevokeInvite(inv.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded text-[10px] hover:bg-red-500/10"
+                          style={{ fontFamily: "DM Mono, monospace", color: "#E84747", border: "1px solid #E8474740" }}
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

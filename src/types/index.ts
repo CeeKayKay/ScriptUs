@@ -55,6 +55,17 @@ export interface CueTypeConfig {
   associatedRole: ProjectRole;
 }
 
+export interface CommentView {
+  id: string;
+  lineId: string | null;
+  scriptRef: string | null;
+  text: string;
+  role: string | null;
+  resolved: boolean;
+  user: { id: string; name: string; image?: string };
+  createdAt: string;
+}
+
 export interface ScriptLineView {
   id: string;
   sceneId: string;
@@ -63,6 +74,7 @@ export interface ScriptLineView {
   text: string;
   sortOrder: number;
   cues: CueView[];
+  comments?: CommentView[];
 }
 
 export interface CueView {
@@ -139,6 +151,15 @@ export interface CustomCueTypeView {
   bgColor: string;
   borderColor: string;
   associatedRole: string;
+}
+
+export interface InviteView {
+  id: string;
+  email: string;
+  role: ProjectRole;
+  status: "PENDING" | "ACCEPTED" | "EXPIRED";
+  sentBy: { name: string };
+  createdAt: string;
 }
 
 // ---- Cue Editor ----
