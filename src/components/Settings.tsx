@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPE_LIST } from "@/lib/cue-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectRole, CustomRoleView, CustomCueTypeView } from "@/types";
 
 interface SettingsProps {
@@ -51,6 +52,7 @@ export function Settings({ projectId, myRole }: SettingsProps) {
   } = useStageStore();
 
   const isAdmin = ADMIN_ROLES.includes(myRole);
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<SettingsTab>("preferences");
 
   // --- Add Role form ---
@@ -290,12 +292,15 @@ export function Settings({ projectId, myRole }: SettingsProps) {
       style={{ background: "rgba(0,0,0,0.7)" }}
     >
       <div
-        className="w-full max-w-xl rounded-xl animate-fade-in"
+        className="w-full animate-fade-in"
         style={{
           background: "#1a1916",
-          border: "1px solid #2a2720",
-          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
-          maxHeight: "80vh",
+          border: isMobile ? "none" : "1px solid #2a2720",
+          boxShadow: isMobile ? "none" : "0 25px 50px rgba(0,0,0,0.5)",
+          borderRadius: isMobile ? 0 : 12,
+          maxWidth: isMobile ? "100%" : "36rem",
+          maxHeight: isMobile ? "100%" : "80vh",
+          height: isMobile ? "100%" : "auto",
           display: "flex",
           flexDirection: "column",
         }}

@@ -3,6 +3,7 @@
 import { forwardRef, useRef, useCallback, useState, useEffect } from "react";
 import { CueBadge } from "./CueBadge";
 import { CUE_TYPES } from "@/lib/cue-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { ScriptLineView, CueType, CueView, LineType, ProjectRole } from "@/types";
 
 interface ScriptLineProps {
@@ -237,6 +238,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
     const hasActiveCue = relevantCues.some((c) => c.id === activeCueId);
     const activeCue = relevantCues.find((c) => c.id === activeCueId);
     const activeCueConfig = activeCue ? CUE_TYPES[activeCue.type] : null;
+    const isMobile = useIsMobile();
 
     // --- Act Header ---
     if (line.type === "ACT_HEADER") {
@@ -421,10 +423,13 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
         <div
           ref={ref}
           data-line-id={line.id}
-          className="script-line group flex gap-4"
+          className="script-line group"
           style={{
-            padding: "3px 0 3px 16px",
-            paddingTop: relevantCues.some((c) => c.scriptRef) ? 24 : 3,
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? 2 : 16,
+            padding: isMobile ? "4px 8px" : "3px 0 3px 16px",
+            paddingTop: relevantCues.some((c) => c.scriptRef) ? 24 : (isMobile ? 4 : 3),
             margin: "2px 0",
             background: hasActiveCue ? "rgba(255,255,255,0.03)" : undefined,
             borderLeft: hasActiveCue
@@ -436,8 +441,12 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
         >
           {/* Character name */}
           <div
-            className="flex-shrink-0 text-right"
-            style={{ width: 110, paddingTop: 3 }}
+            className="flex-shrink-0"
+            style={{
+              width: isMobile ? "auto" : 110,
+              paddingTop: isMobile ? 0 : 3,
+              textAlign: isMobile ? "left" : "right",
+            }}
           >
             {canEdit ? (
               <EditableText
@@ -450,7 +459,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   fontWeight: 700,
                   color: "#E8C547",
                   letterSpacing: "0.05em",
-                  textAlign: "right",
+                  textAlign: isMobile ? "left" : "right",
                   outline: "none",
                 }}
                 focusStyle={{ background: "rgba(232,197,71,0.06)", borderRadius: 3 }}

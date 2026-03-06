@@ -4,6 +4,7 @@ import { useMemo, useState, useRef } from "react";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { CUE_TYPES } from "@/lib/cue-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { CueView } from "@/types";
 
 export function CueSidePanel() {
@@ -22,6 +23,7 @@ export function CueSidePanel() {
   } = useStageStore();
 
   const roleConfig = ROLES[activeRole];
+  const isMobile = useIsMobile();
 
   const [expandedCueId, setExpandedCueId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -198,13 +200,24 @@ export function CueSidePanel() {
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col animate-slide-in"
+      className="flex flex-col animate-slide-in"
       style={{
-        width: 320,
-        background: "#1a1916",
-        ...(cuePanelSide === "left"
-          ? { borderRight: `1px solid ${roleConfig.color}15` }
-          : { borderLeft: `1px solid ${roleConfig.color}15` }),
+        ...(isMobile
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: 40,
+              width: "100%",
+              background: "#1a1916",
+            }
+          : {
+              flexShrink: 0,
+              width: 320,
+              background: "#1a1916",
+              ...(cuePanelSide === "left"
+                ? { borderRight: `1px solid ${roleConfig.color}15` }
+                : { borderLeft: `1px solid ${roleConfig.color}15` }),
+            }),
       }}
     >
       {/* Panel header */}

@@ -3,6 +3,7 @@
 import { useStageStore } from "@/lib/store";
 import { ROLES, ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPES } from "@/lib/cue-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectRole } from "@/types";
 
 interface RoleSwitcherProps {
@@ -12,29 +13,34 @@ interface RoleSwitcherProps {
 export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
   const { activeRole, setActiveRole } = useStageStore();
   const activeConfig = ROLES[activeRole];
+  const isMobile = useIsMobile();
 
   return (
     <div className="flex-shrink-0">
       {/* Role tabs */}
       <div
-        className="flex items-center gap-1 px-5 py-2 overflow-x-auto"
+        className="flex items-center gap-1 overflow-x-auto"
         style={{
           background: "#16150f",
           borderBottom: "1px solid rgba(255,255,255,0.03)",
+          padding: isMobile ? "6px 8px" : "8px 20px",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        <span
-          className="mr-2 flex-shrink-0"
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 18,
-            color: "#555",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
-          View as:
-        </span>
+        {!isMobile && (
+          <span
+            className="mr-2 flex-shrink-0"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 18,
+              color: "#555",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            View as:
+          </span>
+        )}
 
         {ROLE_LIST.map((role) => {
           const isActive = activeRole === role.id;
@@ -42,20 +48,24 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
             <button
               key={role.id}
               onClick={() => setActiveRole(role.id)}
-              className="flex items-center gap-2 px-4 py-2 rounded-md transition-all whitespace-nowrap flex-shrink-0"
+              className="flex items-center gap-1.5 rounded-md transition-all whitespace-nowrap flex-shrink-0"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 22,
+                fontSize: isMobile ? 12 : 22,
                 fontWeight: isActive ? 700 : 400,
                 color: isActive ? role.color : "#777",
                 background: isActive ? role.color + "12" : "transparent",
                 border: isActive
                   ? `1px solid ${role.color}40`
                   : "1px solid transparent",
+                padding: isMobile ? "6px 10px" : "8px 16px",
               }}
             >
-              <span style={{ fontSize: 26 }}>{role.icon}</span>
-              {role.label}
+              <span style={{ fontSize: isMobile ? 16 : 26 }}>{role.icon}</span>
+              {!isMobile && role.label}
+              {isMobile && isActive && (
+                <span>{role.label}</span>
+              )}
               {role.id === myRole && (
                 <span
                   className="text-[8px] px-1 py-0.5 rounded"
@@ -74,22 +84,26 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
 
       {/* Active cue types legend */}
       <div
-        className="flex items-center gap-3 px-5 py-1.5"
+        className="flex items-center gap-2 overflow-x-auto"
         style={{
           background: "#13120f",
           borderBottom: "1px solid rgba(255,255,255,0.02)",
+          padding: isMobile ? "4px 8px" : "6px 20px",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        <span
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 18,
-            color: "#444",
-            letterSpacing: "0.08em",
-          }}
-        >
-          SHOWING:
-        </span>
+        {!isMobile && (
+          <span
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 18,
+              color: "#444",
+              letterSpacing: "0.08em",
+            }}
+          >
+            SHOWING:
+          </span>
+        )}
 
         {activeConfig.visibleCueTypes.map((type) => {
           const config = CUE_TYPES[type];
@@ -97,16 +111,18 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
           return (
             <span
               key={type}
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-1 flex-shrink-0"
               style={{
                 fontFamily: "DM Mono, monospace",
-                fontSize: 20,
+                fontSize: isMobile ? 11 : 20,
                 color: config.color,
               }}
             >
               <span
-                className="inline-block w-3.5 h-3.5 rounded-sm"
+                className="inline-block rounded-sm"
                 style={{
+                  width: isMobile ? 10 : 14,
+                  height: isMobile ? 10 : 14,
                   background: config.color + "40",
                   border: `1px solid ${config.color}`,
                 }}
@@ -120,11 +136,11 @@ export function RoleSwitcher({ myRole }: RoleSwitcherProps) {
           <span
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: 20,
+              fontSize: isMobile ? 11 : 20,
               color: "#444",
             }}
           >
-            Script only (no cues)
+            Script only
           </span>
         )}
       </div>

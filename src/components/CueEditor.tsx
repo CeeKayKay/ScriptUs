@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useStageStore } from "@/lib/store";
 import { CUE_TYPES, CUE_TYPE_LIST } from "@/lib/cue-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { CueType, CueStatus } from "@/types";
 
 interface CueEditorProps {
@@ -13,6 +14,7 @@ interface CueEditorProps {
 export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore } = useStageStore();
   const isEditing = !!editingCue;
+  const isMobile = useIsMobile();
 
   // Auto-select cue type based on active role
   const defaultType = (): CueType => {
@@ -198,22 +200,29 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
       style={{ background: "rgba(0,0,0,0.7)" }}
     >
       <div
-        className="w-full max-w-2xl rounded-xl animate-fade-in"
+        className="w-full animate-fade-in"
         style={{
           background: "#1a1916",
-          border: "1px solid #2a2720",
-          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+          border: isMobile ? "none" : "1px solid #2a2720",
+          boxShadow: isMobile ? "none" : "0 25px 50px rgba(0,0,0,0.5)",
+          borderRadius: isMobile ? 0 : 12,
+          maxWidth: isMobile ? "100%" : "42rem",
+          maxHeight: isMobile ? "100%" : "90vh",
+          height: isMobile ? "100%" : "auto",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: "1px solid #2a2720" }}
+          className="flex items-center justify-between flex-shrink-0"
+          style={{ borderBottom: "1px solid #2a2720", padding: isMobile ? "12px" : "16px 24px" }}
         >
           <h2
             style={{
               fontFamily: "Playfair Display, serif",
-              fontSize: 36,
+              fontSize: isMobile ? 22 : 36,
               fontWeight: 600,
             }}
           >
@@ -229,7 +238,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         </div>
 
         {/* Form */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="py-5 space-y-4 flex-1 overflow-y-auto" style={{ padding: isMobile ? "16px 12px" : "20px 24px" }}>
           {error && (
             <div
               className="px-3 py-2 rounded text-sm"
@@ -531,8 +540,8 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
 
         {/* Footer actions */}
         <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderTop: "1px solid #2a2720" }}
+          className="flex items-center justify-between flex-shrink-0"
+          style={{ borderTop: "1px solid #2a2720", padding: isMobile ? "12px" : "16px 24px" }}
         >
           <div>
             {isEditing && (

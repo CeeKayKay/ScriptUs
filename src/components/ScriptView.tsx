@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
 import type { CueView, ScriptLineView, LineType } from "@/types";
 
@@ -39,6 +40,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
   const lineRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const visibleLineIdsRef = useRef<Set<string>>(new Set());
   const roleConfig = ROLES[activeRole];
+  const isMobile = useIsMobile();
 
   // --- Add scene state ---
   const [showAddScene, setShowAddScene] = useState(false);
@@ -310,7 +312,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
     <div
       ref={containerRef}
       className="flex-1 overflow-y-auto"
-      style={{ padding: "0 32px 80px" }}
+      style={{ padding: isMobile ? "0 8px 80px" : "0 32px 80px" }}
     >
       {/* Sticky format toolbar */}
       {canWrite && (
@@ -356,7 +358,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
           />
         </div>
       )}
-      <div style={{ maxWidth: 740, margin: "0 auto", paddingTop: 16 }}>
+      <div style={{ maxWidth: isMobile ? "100%" : 740, margin: "0 auto", paddingTop: isMobile ? 8 : 16 }}>
         {allLines.map((line, idx) => {
           const isSceneEnd = sceneIds.some(
             (sid) => sceneEndIndices[sid] === idx
@@ -404,7 +406,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                           className="px-2 py-1.5 rounded"
                           style={{
                             fontFamily: "DM Mono, monospace",
-                            fontSize: 22,
+                            fontSize: isMobile ? 14 : 22,
                             background: "#13120f",
                             border: "1px solid #2a2720",
                             color: "#e0ddd5",
@@ -427,8 +429,8 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                             className="px-2 py-1.5 rounded"
                             style={{
                               fontFamily: "DM Mono, monospace",
-                              fontSize: 22,
-                              width: 200,
+                              fontSize: isMobile ? 14 : 22,
+                              width: isMobile ? 120 : 200,
                               background: "#13120f",
                               border: "1px solid #2a2720",
                               color: "#E8C547",
@@ -458,7 +460,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                             newLineType === "DIALOGUE" || newLineType === "SONG"
                               ? "Libre Baskerville, serif"
                               : "DM Mono, monospace",
-                          fontSize: 22,
+                          fontSize: isMobile ? 14 : 22,
                           background: "#13120f",
                           border: "1px solid #2a2720",
                           color: "#e0ddd5",

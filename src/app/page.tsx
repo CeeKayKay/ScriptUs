@@ -126,12 +126,12 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen p-8 max-w-5xl mx-auto">
+    <div className="min-h-screen p-4 sm:p-8 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-10 gap-3">
         <div>
           <h1
-            className="text-3xl font-bold mb-1"
+            className="text-2xl sm:text-3xl font-bold mb-1"
             style={{ fontFamily: "Playfair Display, serif", color: "#E8C547" }}
           >
             ◆ SCRIPTUS
@@ -146,10 +146,10 @@ export default function HomePage() {
             Welcome back, {session?.user?.name || "Director"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => signOut()}
-            className="px-4 py-2.5 rounded-lg transition-colors"
+            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors"
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 12,
@@ -162,7 +162,7 @@ export default function HomePage() {
           </button>
           <Link
             href="/project/new"
-            className="px-5 py-2.5 rounded-lg transition-colors"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-colors"
             style={{
               fontFamily: "DM Mono, monospace",
               fontSize: 12,
@@ -218,7 +218,7 @@ export default function HomePage() {
                 borderColor: "#2a2720",
               }}
             >
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                 <div>
                   <h2
                     className="text-xl font-semibold mb-1"
@@ -253,7 +253,7 @@ export default function HomePage() {
               </div>
 
               <div
-                className="flex gap-6 mt-4"
+                className="flex flex-wrap gap-3 sm:gap-6 mt-3 sm:mt-4"
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 11,

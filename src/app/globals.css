@@ -197,3 +197,30 @@ select:focus-visible {
 [data-tooltip]:hover::after {
   opacity: 1;
 }
+
+/* ---- Mobile optimizations ---- */
+@media (max-width: 767px) {
+  /* Prevent horizontal overflow */
+  html, body {
+    overflow-x: hidden;
+  }
+
+  /* Ensure touch targets are at least 44px */
+  button, [role="button"], select {
+    min-height: 36px;
+  }
+
+  /* Hide scrollbar on mobile for horizontal scroll areas */
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
+  .overflow-x-auto {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Disable tooltip on mobile (no hover) */
+  [data-tooltip]::after {
+    display: none;
+  }
+}

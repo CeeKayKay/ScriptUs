@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { useYjs } from "@/hooks/useYjs";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { Header } from "@/components/Header";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { ScriptView } from "@/components/ScriptView";
@@ -29,11 +30,14 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     activeRole,
     setProject,
     isCuePanelOpen,
+    toggleCuePanel,
     isCueEditorOpen,
     isSettingsOpen,
     cuePanelSide,
     setOnlineUsers,
   } = useStageStore();
+
+  const isMobile = useIsMobile();
 
   // Real-time collaboration
   const yjs = useYjs({
@@ -135,15 +139,47 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Cue side panel on left */}
-        {showSidePanel && cuePanelSide === "left" && <CueSidePanel />}
+        {/* Cue side panel on left (desktop only for side layout) */}
+        {showSidePanel && cuePanelSide === "left" && !isMobile && <CueSidePanel />}
 
         {/* Script panel */}
         <ScriptView broadcast={broadcast} />
 
-        {/* Cue side panel on right */}
-        {showSidePanel && cuePanelSide === "right" && <CueSidePanel />}
+        {/* Cue side panel on right (desktop only for side layout) */}
+        {showSidePanel && cuePanelSide === "right" && !isMobile && <CueSidePanel />}
       </div>
+
+      {/* Mobile: Cue panel overlay */}
+      {isMobile && showSidePanel && <CueSidePanel />}
+
+      {/* Mobile: Floating cue panel toggle */}
+      {isMobile && roleConfig.hasCuePanel && !showSidePanel && (
+        <button
+          onClick={toggleCuePanel}
+          style={{
+            position: "fixed",
+            bottom: 20,
+            right: 16,
+            zIndex: 30,
+            width: 48,
+            height: 48,
+            borderRadius: "50%",
+            background: roleConfig.color + "20",
+            border: `2px solid ${roleConfig.color}60`,
+            color: roleConfig.color,
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+          }}
+          title="Open Cue Sheet"
+        >
+          CUE
+        </button>
+      )}
 
       {/* Cue editor modal */}
       {isCueEditorOpen && <CueEditor projectId={params.id} broadcast={broadcast} />}
@@ -151,33 +187,35 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       {/* Settings modal */}
       {isSettingsOpen && <Settings projectId={params.id} myRole={myRole} />}
 
-      {/* Footer status bar */}
-      <div
-        className="flex items-center justify-between px-5 py-1.5 flex-shrink-0"
-        style={{
-          background: "#1a1916",
-          borderTop: "1px solid rgba(255,255,255,0.03)",
-          fontFamily: "DM Mono, monospace",
-          fontSize: 10,
-        }}
-      >
-        <div className="flex gap-4" style={{ color: "#555" }}>
-          <span>
-            {roleConfig.icon} {roleConfig.label} View
-          </span>
-          <span>
-            {yjs.connected ? (
-              <span style={{ color: "#47E86A" }}>● Connected</span>
-            ) : (
-              <span style={{ color: "#E87847" }}>● Disconnected</span>
-            )}
-          </span>
+      {/* Footer status bar (hidden on mobile) */}
+      {!isMobile && (
+        <div
+          className="flex items-center justify-between px-5 py-1.5 flex-shrink-0"
+          style={{
+            background: "#1a1916",
+            borderTop: "1px solid rgba(255,255,255,0.03)",
+            fontFamily: "DM Mono, monospace",
+            fontSize: 10,
+          }}
+        >
+          <div className="flex gap-4" style={{ color: "#555" }}>
+            <span>
+              {roleConfig.icon} {roleConfig.label} View
+            </span>
+            <span>
+              {yjs.connected ? (
+                <span style={{ color: "#47E86A" }}>● Connected</span>
+              ) : (
+                <span style={{ color: "#E87847" }}>● Disconnected</span>
+              )}
+            </span>
+          </div>
+          <div style={{ color: "#444" }}>
+            {yjs.onlineUsers.length} collaborator
+            {yjs.onlineUsers.length !== 1 ? "s" : ""} online
+          </div>
         </div>
-        <div style={{ color: "#444" }}>
-          {yjs.onlineUsers.length} collaborator
-          {yjs.onlineUsers.length !== 1 ? "s" : ""} online
-        </div>
-      </div>
+      )}
     </div>
   );
 }
