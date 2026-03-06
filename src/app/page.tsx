@@ -309,16 +309,6 @@ export default function HomePage() {
           >
             No productions yet
           </p>
-          <p
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: 12,
-              color: "#555",
-              marginTop: 8,
-            }}
-          >
-            Create a new production or run `npm run db:seed` for demo data
-          </p>
         </div>
       ) : (
         <div className="grid gap-4">
