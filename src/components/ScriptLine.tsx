@@ -20,6 +20,7 @@ interface ScriptLineProps {
   onDeleteLine?: (lineId: string) => void;
   onEditSceneTitle?: (sceneId: string, title: string) => void;
   onDeleteScene?: (sceneId: string) => void;
+  onTyping?: (lineId: string, field: "text" | "character" | "title", value: string) => void;
 }
 
 // ---- Text with inline cue highlights and badges above highlighted text ----
@@ -229,6 +230,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
       onDeleteLine,
       onEditSceneTitle,
       onDeleteScene,
+      onTyping,
     },
     ref
   ) {
@@ -276,7 +278,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           className="pt-6 pb-3 group/scene"
           style={{
             fontFamily: "Playfair Display, serif",
-            fontSize: Math.round(scriptTextSize * 0.9),
+            fontSize: Math.round(scriptTextSize * 1.15),
             fontWeight: 600,
             color: "#FFFFFF",
             letterSpacing: "0.08em",
@@ -301,6 +303,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   onEditSceneTitle?.(sceneId, newTitle.trim());
                 }
               }}
+              onTyping={onTyping ? (v) => onTyping(sceneId, "title", v) : undefined}
             />
           ) : (
             <span>{titleText}</span>
@@ -374,6 +377,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                       onEditLine?.(line.id, { text: newText.trim() });
                     }
                   }}
+                  onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
                 />
               ) : (
                 <CuedText
@@ -443,7 +447,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           <div
             className="flex-shrink-0"
             style={{
-              width: isMobile ? "auto" : 110,
+              width: isMobile ? "auto" : Math.max(110, scriptTextSize * 6),
               paddingTop: isMobile ? 0 : 3,
               textAlign: isMobile ? "left" : "right",
             }}
@@ -455,7 +459,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                 placeholder="NAME"
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 12,
+                  fontSize: scriptTextSize,
                   fontWeight: 700,
                   color: "#E8C547",
                   letterSpacing: "0.05em",
@@ -469,12 +473,13 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     onEditLine?.(line.id, { character: upper });
                   }
                 }}
+                onTyping={onTyping ? (v) => onTyping(line.id, "character", v) : undefined}
               />
             ) : (
               <div
                 style={{
                   fontFamily: "DM Mono, monospace",
-                  fontSize: 12,
+                  fontSize: scriptTextSize,
                   fontWeight: 700,
                   color: "#E8C547",
                   letterSpacing: "0.05em",
@@ -515,6 +520,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                         onEditLine?.(line.id, { text: newText.trim() });
                       }
                     }}
+                    onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
                   />
                 ) : (
                   <CuedText
@@ -578,6 +584,7 @@ function EditableCuedText({
   onAddCue,
   showAddButton,
   onSave,
+  onTyping,
 }: {
   text: string;
   cues: CueView[];
@@ -592,6 +599,7 @@ function EditableCuedText({
   onAddCue?: (lineId: string, selectedText?: string) => void;
   showAddButton?: boolean;
   onSave: (newText: string) => void;
+  onTyping?: (value: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const clickPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -607,6 +615,7 @@ function EditableCuedText({
         activeRole={activeRole}
         lineId={lineId}
         onAddCue={onAddCue}
+        onTyping={onTyping}
         autoFocus
         clickPos={clickPosRef.current}
         onSave={(newText) => {
@@ -674,6 +683,7 @@ function EditableText({
   multiline,
   onSave,
   onCancel,
+  onTyping,
   autoFocus,
   clickPos,
   activeRole,
@@ -688,6 +698,7 @@ function EditableText({
   multiline?: boolean;
   onSave: (newText: string) => void;
   onCancel?: () => void;
+  onTyping?: (value: string) => void;
   autoFocus?: boolean;
   clickPos?: { x: number; y: number } | null;
   activeRole?: ProjectRole;
@@ -697,9 +708,25 @@ function EditableText({
   const elRef = useRef<HTMLElement>(null);
   const originalRef = useRef(text);
   const focusedRef = useRef(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
+
+  const handleInput = useCallback(() => {
+    if (!onTyping || !elRef.current) return;
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      const currentText = elRef.current?.innerText || "";
+      onTyping(currentText);
+    }, 80);
+  }, [onTyping]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
 
   const updateToolbarPosition = useCallback(() => {
     const sel = window.getSelection();
@@ -866,6 +893,7 @@ function EditableText({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
+        onInput={handleInput}
         onPaste={handlePaste}
         data-placeholder={placeholder}
       >

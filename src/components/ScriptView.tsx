@@ -173,6 +173,13 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
     "ACTOR",
   ].includes(activeRole);
 
+  const handleTyping = useCallback(
+    (lineId: string, field: "text" | "character" | "title", value: string) => {
+      broadcast?.({ type: "line-typing", lineId, field, value });
+    },
+    [broadcast]
+  );
+
   const handleCreateScene = async () => {
     if (!newSceneTitle.trim() || !projectId) return;
     setSceneSaving(true);
@@ -399,6 +406,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                 onDeleteLine={handleDeleteLine}
                 onEditSceneTitle={handleEditSceneTitle}
                 onDeleteScene={handleDeleteScene}
+                onTyping={handleTyping}
               />
 
               {/* Add line button at end of each scene */}
@@ -587,7 +595,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                 <div
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: 10,
+                    fontSize: Math.round(scriptTextSize * 0.55),
                     color: "#888",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
@@ -603,7 +611,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="block mb-1"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 10,
+                        fontSize: Math.round(scriptTextSize * 0.5),
                         color: "#888",
                       }}
                     >
@@ -617,7 +625,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="w-full px-3 py-2 rounded"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 13,
+                        fontSize: scriptTextSize,
                         background: "#13120f",
                         border: "1px solid #2a2720",
                         color: "#e0ddd5",
@@ -630,7 +638,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="block mb-1"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 10,
+                        fontSize: Math.round(scriptTextSize * 0.5),
                         color: "#888",
                       }}
                     >
@@ -644,7 +652,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="w-full px-3 py-2 rounded"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 13,
+                        fontSize: scriptTextSize,
                         background: "#13120f",
                         border: "1px solid #2a2720",
                         color: "#e0ddd5",
@@ -657,7 +665,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="block mb-1"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 10,
+                        fontSize: Math.round(scriptTextSize * 0.5),
                         color: "#888",
                       }}
                     >
@@ -671,7 +679,7 @@ export function ScriptView({ broadcast }: ScriptViewProps) {
                       className="w-full px-3 py-2 rounded"
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: 13,
+                        fontSize: scriptTextSize,
                         background: "#13120f",
                         border: "1px solid #2a2720",
                         color: "#e0ddd5",

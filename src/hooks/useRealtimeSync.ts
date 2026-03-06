@@ -10,6 +10,7 @@ type SyncMessage =
   | { type: "line-update"; sceneId: string; lineId: string; updates: Partial<ScriptLineView>; senderId: string }
   | { type: "line-add"; sceneId: string; line: ScriptLineView; senderId: string }
   | { type: "line-delete"; sceneId: string; lineId: string; senderId: string }
+  | { type: "line-typing"; lineId: string; field: "text" | "character" | "title"; value: string; senderId: string }
   | { type: "scene-add"; scene: SceneView; senderId: string }
   | { type: "scene-title"; sceneId: string; title: string; senderId: string }
   | { type: "scene-delete"; sceneId: string; senderId: string }
@@ -55,6 +56,26 @@ export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
               case "line-delete":
                 s.deleteLine(msg.sceneId, msg.lineId);
                 break;
+              case "line-typing": {
+                // Live typing: update text/character in store for real-time display
+                if (msg.field === "title") {
+                  // lineId is actually sceneId for title typing
+                  s.updateSceneTitle(msg.lineId, msg.value);
+                } else {
+                  // Find which scene this line belongs to
+                  const scene = s.scenes.find((sc) =>
+                    sc.lines.some((l) => l.id === msg.lineId)
+                  );
+                  if (scene) {
+                    const updates: Partial<ScriptLineView> =
+                      msg.field === "character"
+                        ? { character: msg.value }
+                        : { text: msg.value };
+                    s.updateLine(scene.id, msg.lineId, updates);
+                  }
+                }
+                break;
+              }
               case "scene-add":
                 s.addScene(msg.scene);
                 break;
