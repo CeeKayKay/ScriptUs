@@ -61,29 +61,6 @@ export default function HomePage() {
           </p>
 
           <div className="space-y-3">
-            <button
-              onClick={() => signIn("google")}
-              className="w-full px-6 py-3 rounded-lg border transition-colors hover:bg-white/3"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: 13,
-                background: "#1a1916",
-                borderColor: "#2a2720",
-                color: "#e0ddd5",
-              }}
-            >
-              Sign in with Google
-            </button>
-
-            <div
-              className="flex items-center gap-3 my-4"
-              style={{ color: "#444" }}
-            >
-              <div className="flex-1 h-px" style={{ background: "#2a2720" }} />
-              <span style={{ fontFamily: "DM Mono, monospace", fontSize: 11 }}>or</span>
-              <div className="flex-1 h-px" style={{ background: "#2a2720" }} />
-            </div>
-
             {!showEmailForm ? (
               <button
                 onClick={() => setShowEmailForm(true)}
@@ -91,12 +68,12 @@ export default function HomePage() {
                 style={{
                   fontFamily: "DM Mono, monospace",
                   fontSize: 13,
-                  background: "#1a1916",
-                  borderColor: "#2a2720",
-                  color: "#e0ddd5",
+                  background: "#E8C54715",
+                  borderColor: "#E8C54740",
+                  color: "#E8C547",
                 }}
               >
-                Sign in / Create Account with Email
+                Sign in / Create Account
               </button>
             ) : (
               <div
