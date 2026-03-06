@@ -103,6 +103,24 @@ interface StageStore {
       role: ProjectRole;
     }>
   ) => void;
+
+  // Remote cursors
+  remoteCursors: Array<{
+    userId: string;
+    name: string;
+    color: string;
+    lineId: string;
+    field: "text" | "character" | "title" | null;
+  }>;
+  setRemoteCursors: (
+    cursors: Array<{
+      userId: string;
+      name: string;
+      color: string;
+      lineId: string;
+      field: "text" | "character" | "title" | null;
+    }>
+  ) => void;
 }
 
 // Read persisted cue panel side from localStorage
@@ -362,4 +380,7 @@ export const useStageStore = create<StageStore>((set) => ({
 
   onlineUsers: [],
   setOnlineUsers: (users) => set({ onlineUsers: users }),
+
+  remoteCursors: [],
+  setRemoteCursors: (cursors) => set({ remoteCursors: cursors }),
 }));

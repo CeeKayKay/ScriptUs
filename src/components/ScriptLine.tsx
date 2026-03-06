@@ -4,6 +4,7 @@ import { forwardRef, useRef, useCallback, useState, useEffect } from "react";
 import { CueBadge } from "./CueBadge";
 import { CUE_TYPES } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useStageStore } from "@/lib/store";
 import type { ScriptLineView, CueType, CueView, CommentView, LineType, ProjectRole } from "@/types";
 
 interface ScriptLineProps {
@@ -24,6 +25,7 @@ interface ScriptLineProps {
   onTyping?: (lineId: string, field: "text" | "character" | "title", value: string) => void;
   onResolveComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
+  updateCursor?: (lineId: string | null, field?: "text" | "character" | "title" | null) => void;
 }
 
 // ---- Text with inline cue highlights and badges above highlighted text ----
@@ -360,6 +362,45 @@ function CommentThread({
   );
 }
 
+// ---- Remote cursor indicator (shows other users editing a line) ----
+
+function RemoteCursorIndicator({ cursors }: { cursors: Array<{ userId: string; name: string; color: string; field: "text" | "character" | "title" | null }> }) {
+  if (cursors.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 mb-0.5" style={{ minHeight: 18 }}>
+      {cursors.map((c) => (
+        <div
+          key={c.userId}
+          className="flex items-center gap-1 animate-fade-in"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 10,
+            fontWeight: 600,
+            color: c.color,
+            background: `${c.color}15`,
+            border: `1px solid ${c.color}40`,
+            borderRadius: 3,
+            padding: "1px 6px",
+            lineHeight: 1.4,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: c.color,
+              animation: "pulse-dot 1.5s ease-in-out infinite",
+            }}
+          />
+          {c.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
   function ScriptLine(
     {
@@ -380,6 +421,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
       onTyping,
       onResolveComment,
       onDeleteComment,
+      updateCursor,
     },
     ref
   ) {
@@ -390,6 +432,9 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
     const activeCue = relevantCues.find((c) => c.id === activeCueId);
     const activeCueConfig = activeCue ? CUE_TYPES[activeCue.type] : null;
     const isMobile = useIsMobile();
+    const remoteCursors = useStageStore((s) => s.remoteCursors).filter(
+      (c) => c.lineId === line.id
+    );
 
     // --- Act Header ---
     if (line.type === "ACT_HEADER") {
@@ -453,9 +498,16 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                 }
               }}
               onTyping={onTyping ? (v) => onTyping(sceneId, "title", v) : undefined}
+              onFocusLine={() => updateCursor?.(line.id, "title")}
+              onBlurLine={() => updateCursor?.(null)}
             />
           ) : (
             <span>{titleText}</span>
+          )}
+          {remoteCursors.length > 0 && (
+            <span style={{ marginLeft: 12, verticalAlign: "middle" }}>
+              <RemoteCursorIndicator cursors={remoteCursors} />
+            </span>
           )}
           {canEdit && (
             <button
@@ -486,13 +538,19 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           data-line-id={line.id}
           className="script-line group"
           style={{
+            position: "relative",
             padding: "10px 16px",
             margin: "8px 0",
             background: "rgba(232, 232, 71, 0.04)",
-            borderLeft: "3px solid #E8E84740",
+            borderLeft: remoteCursors.length > 0 ? `3px solid ${remoteCursors[0].color}60` : "3px solid #E8E84740",
             borderRadius: 4,
           }}
         >
+          {remoteCursors.length > 0 && (
+            <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
+              <RemoteCursorIndicator cursors={remoteCursors} />
+            </div>
+          )}
           <div className="flex items-start gap-2">
             <div className="flex-1">
               <div
@@ -536,6 +594,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     }
                   }}
                   onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
+                  onFocusLine={() => updateCursor?.(line.id, "text")}
+                  onBlurLine={() => updateCursor?.(null)}
                 />
               ) : (
                 <CuedText
@@ -583,17 +643,25 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           data-line-id={line.id}
           className="script-line group"
           style={{
+            position: "relative",
             padding: "8px 16px",
             paddingTop: relevantCues.some((c) => c.scriptRef) ? 28 : 8,
             margin: "5px 0",
             background: hasActiveCue ? "var(--stage-hover)" : undefined,
             borderLeft: hasActiveCue
               ? `2px solid ${activeCueConfig?.color || "var(--stage-faint)"}`
+              : remoteCursors.length > 0
+              ? `2px solid ${remoteCursors[0].color}60`
               : "2px solid transparent",
             borderRadius: 4,
             transition: "all 0.3s ease",
           }}
         >
+          {remoteCursors.length > 0 && (
+            <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
+              <RemoteCursorIndicator cursors={remoteCursors} />
+            </div>
+          )}
           <div className="flex items-start gap-2">
             <div className="flex-1">
               {canEdit ? (
@@ -625,6 +693,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                     }
                   }}
                   onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
+                  onFocusLine={() => updateCursor?.(line.id, "text")}
+                  onBlurLine={() => updateCursor?.(null)}
                 />
               ) : (
                 <CuedText
@@ -685,6 +755,7 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           data-line-id={line.id}
           className="script-line group"
           style={{
+            position: "relative",
             display: "flex",
             flexDirection: isMobile ? "column" : "row",
             gap: isMobile ? 2 : 16,
@@ -694,11 +765,19 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
             background: hasActiveCue ? "var(--stage-hover)" : undefined,
             borderLeft: hasActiveCue
               ? `2px solid ${activeCueConfig?.color || "var(--stage-faint)"}`
+              : remoteCursors.length > 0
+              ? `2px solid ${remoteCursors[0].color}60`
               : "2px solid transparent",
             borderRadius: 4,
             transition: "all 0.3s ease",
           }}
         >
+          {/* Remote cursor indicators */}
+          {remoteCursors.length > 0 && (
+            <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
+              <RemoteCursorIndicator cursors={remoteCursors} />
+            </div>
+          )}
           {/* Character name */}
           <div
             className="flex-shrink-0"
@@ -730,6 +809,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                   }
                 }}
                 onTyping={onTyping ? (v) => onTyping(line.id, "character", v) : undefined}
+                onFocusLine={() => updateCursor?.(line.id, "character")}
+                onBlurLine={() => updateCursor?.(null)}
               />
             ) : (
               <div
@@ -778,6 +859,8 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
                       }
                     }}
                     onTyping={onTyping ? (v) => onTyping(line.id, "text", v) : undefined}
+                    onFocusLine={() => updateCursor?.(line.id, "text")}
+                    onBlurLine={() => updateCursor?.(null)}
                   />
                 ) : (
                   <CuedText
@@ -852,6 +935,8 @@ function EditableCuedText({
   showAddButton,
   onSave,
   onTyping,
+  onFocusLine,
+  onBlurLine,
 }: {
   text: string;
   cues: CueView[];
@@ -868,6 +953,8 @@ function EditableCuedText({
   showAddButton?: boolean;
   onSave: (newText: string) => void;
   onTyping?: (value: string) => void;
+  onFocusLine?: () => void;
+  onBlurLine?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const clickPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -885,6 +972,8 @@ function EditableCuedText({
         onAddCue={onAddCue}
         onAddComment={onAddComment}
         onTyping={onTyping}
+        onFocusLine={onFocusLine}
+        onBlurLine={onBlurLine}
         autoFocus
         clickPos={clickPosRef.current}
         onSave={(newText) => {
@@ -960,6 +1049,8 @@ function EditableText({
   lineId,
   onAddCue,
   onAddComment,
+  onFocusLine,
+  onBlurLine,
 }: {
   text: string;
   tag?: "span" | "div";
@@ -976,6 +1067,8 @@ function EditableText({
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
   onAddComment?: (lineId: string, selectedText?: string) => void;
+  onFocusLine?: () => void;
+  onBlurLine?: () => void;
 }) {
   const elRef = useRef<HTMLElement>(null);
   const originalRef = useRef(text);
@@ -1041,7 +1134,8 @@ function EditableText({
       setShowToolbar(true);
       setTimeout(updateToolbarPosition, 0);
     }
-  }, [text, focusStyle, multiline, updateToolbarPosition]);
+    onFocusLine?.();
+  }, [text, focusStyle, multiline, updateToolbarPosition, onFocusLine]);
 
   const handleBlur = useCallback((e: React.FocusEvent) => {
     const related = e.relatedTarget as HTMLElement | null;
@@ -1062,7 +1156,8 @@ function EditableText({
     } else {
       onCancel?.();
     }
-  }, [onSave, onCancel, focusStyle, style]);
+    onBlurLine?.();
+  }, [onSave, onCancel, focusStyle, style, onBlurLine]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

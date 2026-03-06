@@ -18,9 +18,10 @@ const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
   projectId?: string;
+  updateCursor?: (lineId: string | null, field?: "text" | "character" | "title" | null) => void;
 }
 
-export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewProps) {
+export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }: ScriptViewProps) {
   const {
     activeRole,
     projectId: storeProjectId,
@@ -606,6 +607,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp }: ScriptViewPr
                 onTyping={handleTyping}
                 onResolveComment={handleResolveComment}
                 onDeleteComment={handleDeleteComment}
+                updateCursor={updateCursor}
               />
 
               {/* + Add Scene after ACT header */}

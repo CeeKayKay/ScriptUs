@@ -36,6 +36,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     isSettingsOpen,
     cuePanelSide,
     setOnlineUsers,
+    setRemoteCursors,
   } = useStageStore();
 
   const isMobile = useIsMobile();
@@ -51,7 +52,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
   // Real-time document sync
   const { broadcast } = useRealtimeSync(yjs.doc, (session?.user as any)?.id || "anonymous");
 
-  // Sync presence to store
+  // Sync presence and remote cursors to store
   useEffect(() => {
     setOnlineUsers(
       yjs.onlineUsers.map((u) => ({
@@ -62,6 +63,10 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
       }))
     );
   }, [yjs.onlineUsers, setOnlineUsers]);
+
+  useEffect(() => {
+    setRemoteCursors(yjs.remoteCursors);
+  }, [yjs.remoteCursors, setRemoteCursors]);
 
   // Fetch project data
   useEffect(() => {
@@ -146,7 +151,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
         {showSidePanel && cuePanelSide === "left" && !isMobile && <SidePanel />}
 
         {/* Script panel */}
-        <ScriptView broadcast={broadcast} projectId={params.id} />
+        <ScriptView broadcast={broadcast} projectId={params.id} updateCursor={yjs.updateCursor} />
 
         {/* Cue side panel on right (desktop only for side layout) */}
         {showSidePanel && cuePanelSide === "right" && !isMobile && <SidePanel />}

@@ -24,6 +24,14 @@ interface UseYjsOptions {
   userRole: ProjectRole;
 }
 
+export interface RemoteCursor {
+  userId: string;
+  name: string;
+  color: string;
+  lineId: string;
+  field: "text" | "character" | "title" | null;
+}
+
 interface YjsState {
   doc: Y.Doc | null;
   provider: WebsocketProvider | null;
@@ -37,6 +45,7 @@ interface YjsState {
     role: ProjectRole;
     clientId: number;
   }>;
+  remoteCursors: RemoteCursor[];
 }
 
 export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions) {
@@ -47,6 +56,7 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
     connected: false,
     synced: false,
     onlineUsers: [],
+    remoteCursors: [],
   });
 
   const docRef = useRef<Y.Doc | null>(null);
@@ -94,10 +104,11 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
       setState((prev) => ({ ...prev, synced }));
     });
 
-    // Track online users via awareness
+    // Track online users and remote cursors via awareness
     const updateUsers = () => {
       const states = provider.awareness.getStates();
       const users: YjsState["onlineUsers"] = [];
+      const cursors: RemoteCursor[] = [];
 
       states.forEach((state, clientId) => {
         if (state.userId) {
@@ -108,10 +119,20 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
             role: state.role || "VIEWER",
             clientId,
           });
+          // Collect remote cursors (skip self)
+          if (state.userId !== userId && state.cursor?.lineId) {
+            cursors.push({
+              userId: state.userId,
+              name: state.name || "Anonymous",
+              color: state.color || "#888",
+              lineId: state.cursor.lineId,
+              field: state.cursor.field || null,
+            });
+          }
         }
       });
 
-      setState((prev) => ({ ...prev, onlineUsers: users }));
+      setState((prev) => ({ ...prev, onlineUsers: users, remoteCursors: cursors }));
     };
 
     provider.awareness.on("change", updateUsers);
@@ -123,6 +144,7 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
       connected: false,
       synced: false,
       onlineUsers: [],
+      remoteCursors: [],
     });
 
     return () => {
@@ -147,12 +169,12 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
 
   // Helper: update cursor position in awareness
   const updateCursor = useCallback(
-    (lineId: string | null) => {
+    (lineId: string | null, field?: "text" | "character" | "title" | null) => {
       if (providerRef.current) {
         const current = providerRef.current.awareness.getLocalState();
         providerRef.current.awareness.setLocalState({
           ...current,
-          cursor: lineId ? { lineId } : null,
+          cursor: lineId ? { lineId, field: field || null } : null,
         });
       }
     },
