@@ -7,14 +7,6 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
 import type { CueView, ScriptLineView, CommentView, LineType } from "@/types";
 
-const LINE_TYPE_OPTIONS: { value: LineType; label: string }[] = [
-  { value: "DIALOGUE", label: "Dialogue" },
-  { value: "STAGE_DIRECTION", label: "Stage Direction" },
-  { value: "SONG", label: "Song" },
-  { value: "TRANSITION", label: "Transition" },
-  { value: "LOCATION", label: "Location" },
-];
-
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
   projectId?: string;
@@ -40,6 +32,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     addComment,
     resolveComment,
     removeComment,
+    pendingDialogue,
+    setPendingDialogue,
   } = useStageStore();
 
   const projectId = projectIdProp || storeProjectId;
@@ -58,12 +52,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   const [newSceneTitle, setNewSceneTitle] = useState("");
   const [sceneSaving, setSceneSaving] = useState(false);
 
-  // --- Add line state ---
-  const [addingLineToScene, setAddingLineToScene] = useState<string | null>(null);
-  const [newLineType, setNewLineType] = useState<LineType>("DIALOGUE");
-  const [newLineCharacter, setNewLineCharacter] = useState("");
-  const [newLineText, setNewLineText] = useState("");
-  const [lineSaving, setLineSaving] = useState(false);
+  // --- Quick-add line refs (for focusing after character click) ---
+  const quickAddRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   // Can user write content?
   const canWrite = ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(activeRole);
@@ -74,25 +64,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     | { type: "edit-title"; sceneId: string; prev: string };
   const undoStackRef = useRef<UndoAction[]>([]);
   const [undoCount, setUndoCount] = useState(0); // triggers re-render when stack changes
-
-  const { characterGroups, ungroupedCharacters, locations } = useStageStore();
-
-  // Bank of character names: merge store characters + names from existing lines
-  const characterBank = useMemo(() => {
-    const names = new Set<string>();
-    // From store (Writer panel)
-    characterGroups.forEach((g) => g.characters.forEach((c) => names.add(c.name)));
-    ungroupedCharacters.forEach((c) => names.add(c.name));
-    // From existing script lines
-    scenes.forEach((scene) =>
-      scene.lines.forEach((line) => {
-        if (line.character && line.character.trim()) {
-          names.add(line.character.trim().toUpperCase());
-        }
-      })
-    );
-    return Array.from(names).sort();
-  }, [scenes]);
 
   // Flatten all lines across scenes, with scene headers injected
   const allLines = useMemo(() => {
@@ -306,42 +277,58 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     }
   };
 
-  const handleCreateLine = async () => {
-    if (!newLineText.trim() || !addingLineToScene || !projectId) return;
-    setLineSaving(true);
+  // Create a new line in a scene (used by quick-add and character click)
+  const handleQuickAddLine = useCallback(
+    async (sceneId: string, type: LineType, text: string, character?: string) => {
+      if (!text.trim() || !projectId) return;
+      try {
+        const res = await fetch(`/api/projects/${projectId}/scenes`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sceneId,
+            type,
+            character: (type === "DIALOGUE" || type === "SONG") ? (character || null) : null,
+            text: text.trim(),
+          }),
+        });
+        if (!res.ok) return;
+        const line = await res.json();
+        addLineToScene(sceneId, line);
+        broadcast?.({ type: "line-add", sceneId, line });
+        return line;
+      } catch {}
+    },
+    [projectId, addLineToScene, broadcast]
+  );
 
-    try {
-      const res = await fetch(`/api/projects/${projectId}/scenes`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sceneId: addingLineToScene,
-          type: newLineType,
-          character: newLineType === "DIALOGUE" || newLineType === "SONG"
-            ? newLineCharacter.trim() || null
-            : null,
-          text: newLineText.trim(),
-        }),
-      });
+  // Handle pending dialogue from Writer panel character click
+  useEffect(() => {
+    if (!pendingDialogue || !projectId || scenes.length === 0) return;
+    const { character } = pendingDialogue;
+    setPendingDialogue(null);
 
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to add line");
-        return;
+    // Find the last scene to add dialogue to
+    const lastScene = scenes[scenes.length - 1];
+
+    (async () => {
+      const line = await handleQuickAddLine(lastScene.id, "DIALOGUE", "...", character);
+      if (line) {
+        // Focus the new line's text after a tick so React renders it
+        setTimeout(() => {
+          const lineEl = document.querySelector(`[data-line-id="${line.id}"]`);
+          if (lineEl) {
+            lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            // Click on the dialogue text area to activate editing
+            const textEl = lineEl.querySelector('[contenteditable], [style*="Libre Baskerville"]');
+            if (textEl) {
+              (textEl as HTMLElement).click();
+            }
+          }
+        }, 100);
       }
-
-      const line = await res.json();
-      addLineToScene(addingLineToScene, line);
-      broadcast?.({ type: "line-add", sceneId: addingLineToScene, line });
-      setNewLineText("");
-      setNewLineCharacter("");
-      // Keep the form open for rapid entry
-    } catch {
-      alert("Failed to add line");
-    } finally {
-      setLineSaving(false);
-    }
-  };
+    })();
+  }, [pendingDialogue, projectId, scenes, setPendingDialogue, handleQuickAddLine]);
 
   const handleEditLine = useCallback(
     async (lineId: string, updates: { text?: string; character?: string }) => {
@@ -740,147 +727,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
                 </div>
               )}
 
-              {/* Add line button at end of each scene */}
+              {/* Quick-add text area at end of each scene */}
               {isSceneEnd && endSceneId && canWrite && (
-                <div style={{ marginTop: 4, marginBottom: 16 }}>
-                  {addingLineToScene === endSceneId ? (
-                    <div
-                      className="p-3 rounded-lg space-y-2"
-                      style={{
-                        background: "var(--stage-line-hover)",
-                        border: "1px solid var(--stage-border)",
-                      }}
-                    >
-                      <div className="flex gap-2 items-center">
-                        <select
-                          value={newLineType}
-                          onChange={(e) => setNewLineType(e.target.value as LineType)}
-                          className="px-2 py-1.5 rounded"
-                          style={{
-                            fontFamily: "DM Mono, monospace",
-                            fontSize: isMobile ? 14 : 22,
-                            background: "var(--stage-bg)",
-                            border: "1px solid var(--stage-border)",
-                            color: "var(--stage-text)",
-                            outline: "none",
-                          }}
-                        >
-                          {LINE_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-
-                        {(newLineType === "DIALOGUE" || newLineType === "SONG") && (
-                          <CharacterPicker
-                            value={newLineCharacter}
-                            onChange={setNewLineCharacter}
-                            characters={characterBank}
-                            isMobile={isMobile}
-                          />
-                        )}
-                      </div>
-
-                      <textarea
-                        value={newLineText}
-                        onChange={(e) => setNewLineText(e.target.value)}
-                        placeholder={
-                          newLineType === "DIALOGUE"
-                            ? "Enter dialogue..."
-                            : newLineType === "STAGE_DIRECTION"
-                            ? "Enter stage direction..."
-                            : newLineType === "SONG"
-                            ? "Enter lyrics..."
-                            : "Enter transition..."
-                        }
-                        rows={3}
-                        className="w-full px-3 py-2 rounded resize-y"
-                        style={{
-                          fontFamily:
-                            newLineType === "DIALOGUE" || newLineType === "SONG"
-                              ? "Libre Baskerville, serif"
-                              : "DM Mono, monospace",
-                          fontSize: isMobile ? 14 : 22,
-                          background: "var(--stage-bg)",
-                          border: "1px solid var(--stage-border)",
-                          color: "var(--stage-text)",
-                          outline: "none",
-                          lineHeight: 1.7,
-                          fontStyle:
-                            newLineType === "STAGE_DIRECTION" ? "italic" : "normal",
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                            e.preventDefault();
-                            handleCreateLine();
-                          }
-                        }}
-                        autoFocus
-                      />
-
-                      <div className="flex gap-2 items-center">
-                        <button
-                          onClick={handleCreateLine}
-                          disabled={lineSaving || !newLineText.trim()}
-                          className="px-4 py-2 rounded transition-colors"
-                          style={{
-                            fontFamily: "DM Mono, monospace",
-                            fontSize: 18,
-                            fontWeight: 600,
-                            color: "var(--stage-gold)",
-                            background: "#E8C54715",
-                            border: "1px solid #E8C54740",
-                            opacity: lineSaving || !newLineText.trim() ? 0.5 : 1,
-                          }}
-                        >
-                          {lineSaving ? "Adding..." : "Add Line"}
-                        </button>
-                        <span
-                          style={{
-                            fontFamily: "DM Mono, monospace",
-                            fontSize: 16,
-                            color: "var(--stage-faint)",
-                          }}
-                        >
-                          Ctrl+Enter to submit
-                        </span>
-                        <button
-                          onClick={async () => {
-                            if (newLineText.trim()) {
-                              await handleCreateLine();
-                            }
-                            setAddingLineToScene(null);
-                            setNewLineText("");
-                            setNewLineCharacter("");
-                          }}
-                          className="px-4 py-2 rounded transition-colors hover:bg-white/5 ml-auto"
-                          style={{
-                            fontFamily: "DM Mono, monospace",
-                            fontSize: 18,
-                            color: "var(--stage-muted)",
-                            border: "1px solid var(--stage-border-subtle)",
-                          }}
-                        >
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingLineToScene(endSceneId)}
-                      className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 18,
-                        color: "var(--stage-faint)",
-                        border: "1px dashed var(--stage-border)",
-                      }}
-                    >
-                      + Add line
-                    </button>
-                  )}
-                </div>
+                <QuickAddArea
+                  sceneId={endSceneId}
+                  scriptTextSize={scriptTextSize}
+                  isMobile={isMobile}
+                  onAddLine={handleQuickAddLine}
+                  inputRef={(el) => { quickAddRefs.current[endSceneId] = el; }}
+                />
               )}
 
               {/* + Add Scene between scenes */}
@@ -1029,178 +884,73 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   );
 }
 
-// ---- Character name picker with bank ----
+// ---- Quick-add text area at end of each scene ----
 
-function CharacterPicker({
-  value,
-  onChange,
-  characters,
+function QuickAddArea({
+  sceneId,
+  scriptTextSize,
   isMobile,
+  onAddLine,
+  inputRef,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  characters: string[];
+  sceneId: string;
+  scriptTextSize: number;
   isMobile: boolean;
+  onAddLine: (sceneId: string, type: LineType, text: string, character?: string) => Promise<any>;
+  inputRef: (el: HTMLTextAreaElement | null) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const filtered = filter
-    ? characters.filter((c) => c.includes(filter.toUpperCase()))
-    : characters;
-
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [isOpen]);
-
-  const selectCharacter = (name: string) => {
-    onChange(name);
-    setFilter("");
-    setIsOpen(false);
+  const handleSubmit = async () => {
+    if (!text.trim() || saving) return;
+    setSaving(true);
+    try {
+      await onAddLine(sceneId, "STAGE_DIRECTION", text.trim());
+      setText("");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <div className="flex items-center gap-1">
-        <input
-          ref={inputRef}
-          type="text"
-          value={isOpen ? filter : value}
-          onChange={(e) => {
-            const v = e.target.value.toUpperCase();
-            if (isOpen) {
-              setFilter(v);
-            } else {
-              onChange(v);
-            }
-          }}
-          onFocus={() => {
-            if (characters.length > 0) {
-              setIsOpen(true);
-              setFilter(value);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && isOpen) {
-              e.preventDefault();
-              if (filter.trim()) {
-                selectCharacter(filter.trim().toUpperCase());
-              } else if (filtered.length > 0) {
-                selectCharacter(filtered[0]);
-              }
-            }
-            if (e.key === "Escape") {
-              setIsOpen(false);
-              setFilter("");
-            }
-          }}
-          placeholder={characters.length > 0 ? "Select or type..." : "CHARACTER"}
-          className="px-2 py-1.5 rounded"
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: isMobile ? 14 : 22,
-            width: isMobile ? 140 : 200,
-            background: "var(--stage-bg)",
-            border: "1px solid var(--stage-border)",
-            color: "var(--stage-gold)",
-            fontWeight: 700,
-            outline: "none",
-          }}
-        />
-        {characters.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(!isOpen);
-              if (!isOpen) {
-                setFilter("");
-                inputRef.current?.focus();
-              }
-            }}
-            className="px-1.5 py-1.5 rounded hover:bg-white/5 transition-colors"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: isMobile ? 12 : 18,
-              color: "var(--stage-dim)",
-              border: "1px solid var(--stage-border)",
-              background: "var(--stage-bg)",
-              lineHeight: 1,
-            }}
-          >
-            ▾
-          </button>
-        )}
-      </div>
-
-      {/* Dropdown */}
-      {isOpen && (
-        <div
-          className="absolute z-20 mt-1 w-full rounded-lg overflow-hidden"
-          style={{
-            background: "var(--stage-surface)",
-            border: "1px solid var(--stage-border)",
-            boxShadow: "0 8px 24px var(--stage-overlay)",
-            maxHeight: 200,
-            overflowY: "auto",
-            minWidth: isMobile ? 140 : 200,
-          }}
-        >
-          {filtered.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => selectCharacter(name)}
-              className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: isMobile ? 13 : 18,
-                fontWeight: 700,
-                color: name === value ? "var(--stage-gold)" : "var(--stage-heading)",
-                background: name === value ? "#E8C54710" : "transparent",
-              }}
-            >
-              {name}
-            </button>
-          ))}
-          {filter && !characters.includes(filter.toUpperCase()) && (
-            <button
-              type="button"
-              onClick={() => selectCharacter(filter.trim().toUpperCase())}
-              className="w-full text-left px-3 py-2 transition-colors hover:bg-white/5"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: isMobile ? 13 : 18,
-                color: "var(--stage-success)",
-                borderTop: filtered.length > 0 ? "1px solid var(--stage-border)" : "none",
-              }}
-            >
-              + Add &ldquo;{filter.toUpperCase()}&rdquo;
-            </button>
-          )}
-          {!filter && filtered.length === 0 && (
-            <div
-              className="px-3 py-2"
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: isMobile ? 12 : 16,
-                color: "var(--stage-faint)",
-              }}
-            >
-              Type a character name
-            </div>
-          )}
-        </div>
-      )}
+    <div style={{ marginTop: 4, marginBottom: 16 }}>
+      <textarea
+        ref={inputRef}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type here to add a line... (Enter to submit)"
+        rows={1}
+        className="w-full px-4 py-3 rounded-lg resize-none transition-colors"
+        style={{
+          fontFamily: "DM Mono, monospace",
+          fontSize: isMobile ? 14 : scriptTextSize,
+          background: "transparent",
+          border: "1px dashed var(--stage-border)",
+          color: "var(--stage-text)",
+          outline: "none",
+          lineHeight: 1.7,
+          opacity: text ? 1 : 0.6,
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.border = "1px solid var(--stage-border)";
+          e.currentTarget.style.background = "var(--stage-line-hover)";
+          e.currentTarget.style.opacity = "1";
+        }}
+        onBlur={(e) => {
+          if (!text) {
+            e.currentTarget.style.border = "1px dashed var(--stage-border)";
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.opacity = "0.6";
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+      />
     </div>
   );
 }

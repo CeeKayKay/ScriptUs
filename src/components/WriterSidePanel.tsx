@@ -20,6 +20,7 @@ export function WriterSidePanel() {
     setCharacterGroups,
     setUngroupedCharacters,
     setLocations,
+    setPendingDialogue,
   } = useStageStore();
 
   const isMobile = useIsMobile();
@@ -189,7 +190,12 @@ export function WriterSidePanel() {
       key={char.id}
       className="group/char flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
     >
-      <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.8), fontWeight: 600, color: "var(--stage-heading)", letterSpacing: "0.03em" }}>
+      <span
+        onClick={() => setPendingDialogue({ character: char.name })}
+        title={`Click to add ${char.name} dialogue`}
+        style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.8), fontWeight: 600, color: "var(--stage-heading)", letterSpacing: "0.03em", cursor: "pointer" }}
+        className="hover:underline"
+      >
         {char.name}
       </span>
       <div className="flex gap-1 opacity-0 group-hover/char:opacity-100 transition-opacity">

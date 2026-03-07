@@ -104,6 +104,10 @@ interface StageStore {
     }>
   ) => void;
 
+  // Pending dialogue insertion (from Writer panel character click)
+  pendingDialogue: { character: string } | null;
+  setPendingDialogue: (pd: { character: string } | null) => void;
+
   // Remote cursors
   remoteCursors: Array<{
     userId: string;
@@ -377,6 +381,9 @@ export const useStageStore = create<StageStore>((set) => ({
 
   searchQuery: "",
   setSearchQuery: (q) => set({ searchQuery: q }),
+
+  pendingDialogue: null,
+  setPendingDialogue: (pd) => set({ pendingDialogue: pd }),
 
   onlineUsers: [],
   setOnlineUsers: (users) => set({ onlineUsers: users }),
