@@ -5,13 +5,90 @@ import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
-import type { CueView, ScriptLineView, CommentView, LineType } from "@/types";
+import type { CueView, ScriptLineView, LineType, SceneView } from "@/types";
 
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
   projectId?: string;
   updateCursor?: (lineId: string | null, field?: "text" | "character" | "title" | null) => void;
 }
+
+// ---- Helpers ----
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function actNumToWord(act: number): string {
+  const words: Record<number, string> = { 0: "ZERO", 1: "ONE", 2: "TWO", 3: "THREE", 4: "FOUR", 5: "FIVE" };
+  return words[act] || String(act);
+}
+
+function isCharacterName(line: string): boolean {
+  const t = line.trim();
+  return (
+    t.length > 0 &&
+    t.length < 40 &&
+    t === t.toUpperCase() &&
+    /^[A-Z][A-Z\s\-'\.]+$/.test(t) &&
+    !["THE END", "BLACKOUT", "LIGHTS UP", "CURTAIN", "INTERMISSION", "PROLOGUE", "EPILOGUE", "ACT", "SCENE"].includes(t)
+  );
+}
+
+const CHAR_NAME_STYLE =
+  "font-family:DM Mono,monospace;font-weight:700;color:var(--stage-gold);letter-spacing:0.05em;padding-top:0.5em;";
+
+function sceneLinesToHtml(lines: ScriptLineView[]): string {
+  if (lines.length === 0) return "";
+
+  // Structured lines (multiple lines or line with character field)
+  if (lines.length > 1 || (lines[0].character)) {
+    return lines
+      .map((line) => {
+        if ((line.type === "DIALOGUE" || line.type === "SONG") && line.character) {
+          const c = escapeHtml(line.character);
+          const t = line.text ? escapeHtml(line.text).replace(/\n/g, "<br>") : "<br>";
+          return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div><div>${t}</div>`;
+        }
+        if (line.type === "STAGE_DIRECTION" || line.type === "TRANSITION") {
+          const t = line.text ? escapeHtml(line.text).replace(/\n/g, "<br>") : "<br>";
+          return `<div style="font-style:italic;">${t}</div>`;
+        }
+        const t = line.text ? escapeHtml(line.text).replace(/\n/g, "<br>") : "<br>";
+        return `<div>${t}</div>`;
+      })
+      .join("");
+  }
+
+  // Single text blob — detect character names by ALL_CAPS heuristic
+  const text = lines[0].text || "";
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line.trim()) return "<div><br></div>";
+      if (isCharacterName(line)) {
+        const c = escapeHtml(line.trim());
+        return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
+      }
+      return `<div>${escapeHtml(line)}</div>`;
+    })
+    .join("");
+}
+
+function linesToText(lines: ScriptLineView[]): string {
+  if (lines.length === 0) return "";
+  if (lines.length === 1 && !lines[0].character) return lines[0].text;
+  return lines
+    .map((line) => {
+      if ((line.type === "DIALOGUE" || line.type === "SONG") && line.character) {
+        return `${line.character}\n${line.text}`;
+      }
+      return line.text;
+    })
+    .join("\n\n");
+}
+
+// ---- Main Component ----
 
 export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }: ScriptViewProps) {
   const {
@@ -20,7 +97,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     scenes,
     activeCueId,
     setActiveCueId,
-    setVisibleLineIds,
     openCueEditor,
     addScene,
     addLineToScene,
@@ -29,33 +105,27 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     deleteLine,
     deleteScene,
     scriptTextSize,
-    addComment,
-    resolveComment,
-    removeComment,
     pendingDialogue,
     setPendingDialogue,
   } = useStageStore();
 
   const projectId = projectIdProp || storeProjectId;
-
   const containerRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const visibleLineIdsRef = useRef<Set<string>>(new Set());
   const roleConfig = ROLES[activeRole];
   const isMobile = useIsMobile();
 
+  // Scene editor refs for character insertion + live sync
+  const sceneEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const lastFocusedSceneRef = useRef<string | null>(null);
+
   // --- Add scene state ---
   const [showAddScene, setShowAddScene] = useState(false);
-  const [scenePosition, setScenePosition] = useState<string>("end"); // "start" | "end" | "after-act-N"
-  const [newAct, setNewAct] = useState("1");
-  const [newSceneNum, setNewSceneNum] = useState("1");
+  const [scenePosition, setScenePosition] = useState<string>("end");
+  const [newAct, setNewAct] = useState("0");
+  const [newSceneNum, setNewSceneNum] = useState("0");
   const [newSceneTitle, setNewSceneTitle] = useState("");
   const [sceneSaving, setSceneSaving] = useState(false);
 
-  // --- Quick-add line refs (for focusing after character click) ---
-  const quickAddRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
-  // Can user write content?
   const canWrite = ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(activeRole);
 
   // --- Undo stack ---
@@ -63,82 +133,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     | { type: "edit-line"; sceneId: string; lineId: string; prev: { text?: string; character?: string } }
     | { type: "edit-title"; sceneId: string; prev: string };
   const undoStackRef = useRef<UndoAction[]>([]);
-  const [undoCount, setUndoCount] = useState(0); // triggers re-render when stack changes
-
-  // Flatten all lines across scenes, with scene headers injected
-  const allLines = useMemo(() => {
-    const lines: (ScriptLineView & { _sceneId?: string })[] = [];
-
-    scenes.forEach((scene, si) => {
-      if (si === 0 || scene.act !== scenes[si - 1].act) {
-        lines.push({
-          id: `act-${scene.act}`,
-          sceneId: scene.id,
-          type: "ACT_HEADER",
-          text: `ACT ${scene.act === 1 ? "ONE" : scene.act === 2 ? "TWO" : scene.act === 3 ? "THREE" : String(scene.act)}`,
-          sortOrder: -2,
-          cues: [],
-        });
-      }
-
-      lines.push({
-        id: `scene-header-${scene.id}`,
-        sceneId: scene.id,
-        type: "SCENE_HEADER",
-        text: `Scene ${scene.scene} — ${scene.title}`,
-        sortOrder: -1,
-        cues: [],
-        _sceneId: scene.id,
-      });
-
-      lines.push(...scene.lines);
-    });
-
-    return lines;
-  }, [scenes]);
-
-  // Build a map of sceneId -> last line index for inserting "add line" buttons
-  const sceneEndIndices = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (let i = allLines.length - 1; i >= 0; i--) {
-      const sceneId = allLines[i].sceneId;
-      if (!(sceneId in map)) {
-        map[sceneId] = i;
-      }
-    }
-    return map;
-  }, [allLines]);
-
-  // Intersection observer to track visible lines
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const next = new Set(visibleLineIdsRef.current);
-          entries.forEach((entry) => {
-            const lineId = entry.target.getAttribute("data-line-id");
-            if (lineId) {
-              if (entry.isIntersecting) {
-                next.add(lineId);
-              } else {
-                next.delete(lineId);
-              }
-            }
-          });
-          visibleLineIdsRef.current = next;
-          setVisibleLineIds(next);
-      },
-      { root: container, threshold: 0.1 }
-    );
-
-    Object.values(lineRefs.current).forEach((el) => {
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [allLines, setVisibleLineIds]);
+  const [undoCount, setUndoCount] = useState(0);
 
   const handleCueClick = useCallback(
     (cue: CueView) => {
@@ -147,24 +142,20 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     [activeCueId, setActiveCueId]
   );
 
-  const handleAddCue = useCallback(
-    (lineId: string, selectedText?: string) => {
-      // Find which scene this line belongs to
-      const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
-      openCueEditor(undefined, lineId, scene?.id, selectedText);
-    },
-    [openCueEditor, scenes]
-  );
-
   const canAddCues = [
-    "STAGE_MANAGER",
-    "LIGHTING",
-    "SOUND",
-    "SET_DESIGN",
-    "PROPS",
-    "DIRECTOR",
-    "ACTOR",
+    "STAGE_MANAGER", "LIGHTING", "SOUND", "SET_DESIGN", "PROPS", "DIRECTOR", "ACTOR",
   ].includes(activeRole);
+
+  // Broadcast typing for live sync
+  const handleSceneTyping = useCallback(
+    (sceneId: string, value: string) => {
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (!scene || scene.lines.length === 0) return;
+      const lineId = scene.lines[0].id;
+      broadcast?.({ type: "line-typing", lineId, field: "text", value });
+    },
+    [scenes, broadcast]
+  );
 
   const handleTyping = useCallback(
     (lineId: string, field: "text" | "character" | "title", value: string) => {
@@ -173,79 +164,36 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     [broadcast]
   );
 
-  // --- Comment state ---
-  const [commentingLine, setCommentingLine] = useState<string | null>(null);
-  const [commentSelectedText, setCommentSelectedText] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
-  const [commentSaving, setCommentSaving] = useState(false);
-
-  const handleAddComment = useCallback(
-    (lineId: string, selectedText?: string) => {
-      setCommentingLine(lineId);
-      setCommentSelectedText(selectedText || null);
-      setCommentText("");
-    },
-    []
-  );
-
-  const handleSubmitComment = async () => {
-    if (!commentText.trim() || !commentingLine || !projectId) return;
-    setCommentSaving(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lineId: commentingLine,
-          scriptRef: commentSelectedText,
-          text: commentText.trim(),
-          role: activeRole,
-        }),
-      });
-      if (res.ok) {
-        const comment = await res.json();
-        addComment(commentingLine, comment);
-        setCommentingLine(null);
-        setCommentText("");
-        setCommentSelectedText(null);
+  const handleUpdateCursor = useCallback(
+    (lineId: string | null, field?: "text" | "character" | "title" | null) => {
+      if (lineId) {
+        const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
+        if (scene) lastFocusedSceneRef.current = scene.id;
       }
-    } catch {} finally {
-      setCommentSaving(false);
-    }
-  };
-
-  const handleResolveComment = useCallback(
-    async (commentId: string) => {
-      if (!projectId) return;
-      resolveComment(commentId);
-      try {
-        await fetch(`/api/projects/${projectId}/comments`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ commentId, resolved: true }),
-        });
-      } catch {}
+      updateCursor?.(lineId, field);
     },
-    [projectId, resolveComment]
+    [scenes, updateCursor]
   );
 
-  const handleDeleteComment = useCallback(
-    async (commentId: string) => {
-      if (!projectId) return;
-      removeComment(commentId);
-      try {
-        await fetch(`/api/projects/${projectId}/comments?commentId=${commentId}`, {
-          method: "DELETE",
-        });
-      } catch {}
+  // Focus/blur cursor tracking for scene editors
+  const handleSceneFocus = useCallback(
+    (sceneId: string) => {
+      lastFocusedSceneRef.current = sceneId;
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (scene && scene.lines.length > 0) {
+        updateCursor?.(scene.lines[0].id, "text");
+      }
     },
-    [projectId, removeComment]
+    [scenes, updateCursor]
   );
+
+  const handleSceneBlur = useCallback(() => {
+    updateCursor?.(null);
+  }, [updateCursor]);
 
   const handleCreateScene = async () => {
     if (!newSceneTitle.trim() || !projectId) return;
     setSceneSaving(true);
-
     try {
       const res = await fetch(`/api/projects/${projectId}/scenes`, {
         method: "POST",
@@ -257,13 +205,11 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           position: scenePosition,
         }),
       });
-
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to create scene");
         return;
       }
-
       const scene = await res.json();
       addScene(scene, scenePosition);
       broadcast?.({ type: "scene-add", scene, position: scenePosition });
@@ -277,20 +223,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     }
   };
 
-  // Create a new line in a scene (used by quick-add and character click)
-  const handleQuickAddLine = useCallback(
-    async (sceneId: string, type: LineType, text: string, character?: string) => {
+  // Create a new line in a scene
+  const handleCreateLine = useCallback(
+    async (sceneId: string, type: LineType, text: string) => {
       if (!text.trim() || !projectId) return;
       try {
         const res = await fetch(`/api/projects/${projectId}/scenes`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sceneId,
-            type,
-            character: (type === "DIALOGUE" || type === "SONG") ? (character || null) : null,
-            text: text.trim(),
-          }),
+          body: JSON.stringify({ sceneId, type, text: text.trim() }),
         });
         if (!res.ok) return;
         const line = await res.json();
@@ -302,82 +243,90 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     [projectId, addLineToScene, broadcast]
   );
 
+  // Save scene content from single text box
+  const handleSaveSceneContent = useCallback(
+    async (sceneId: string, content: string) => {
+      if (!projectId) return;
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (!scene) return;
+
+      if (scene.lines.length > 0) {
+        const firstLine = scene.lines[0];
+        const prevText = linesToText(scene.lines);
+
+        try {
+          const res = await fetch(`/api/projects/${projectId}/scenes`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lineId: firstLine.id, text: content }),
+          });
+          if (!res.ok) return;
+
+          undoStackRef.current.push({
+            type: "edit-line",
+            sceneId,
+            lineId: firstLine.id,
+            prev: { text: prevText },
+          });
+          setUndoCount(undoStackRef.current.length);
+
+          updateLine(sceneId, firstLine.id, { text: content });
+          broadcast?.({
+            type: "line-update",
+            sceneId,
+            lineId: firstLine.id,
+            updates: { text: content },
+          });
+
+          // Remove extra lines (consolidate to single line)
+          for (const line of scene.lines.slice(1)) {
+            try {
+              await fetch(`/api/projects/${projectId}/scenes?lineId=${line.id}`, {
+                method: "DELETE",
+              });
+              deleteLine(sceneId, line.id);
+              broadcast?.({ type: "line-delete", sceneId, lineId: line.id });
+            } catch {}
+          }
+        } catch {}
+      } else if (content.trim()) {
+        await handleCreateLine(sceneId, "STAGE_DIRECTION", content);
+      }
+    },
+    [projectId, scenes, updateLine, deleteLine, handleCreateLine, broadcast]
+  );
+
   // Handle pending dialogue from Writer panel character click
   useEffect(() => {
-    if (!pendingDialogue || !projectId || scenes.length === 0) return;
+    if (!pendingDialogue || scenes.length === 0) return;
     const { character } = pendingDialogue;
     setPendingDialogue(null);
 
-    // Find the last scene to add dialogue to
-    const lastScene = scenes[scenes.length - 1];
+    const targetSceneId =
+      lastFocusedSceneRef.current && scenes.find((s) => s.id === lastFocusedSceneRef.current)
+        ? lastFocusedSceneRef.current
+        : scenes[scenes.length - 1].id;
 
-    (async () => {
-      const line = await handleQuickAddLine(lastScene.id, "DIALOGUE", "...", character);
-      if (line) {
-        // Focus the new line's text after a tick so React renders it
-        setTimeout(() => {
-          const lineEl = document.querySelector(`[data-line-id="${line.id}"]`);
-          if (lineEl) {
-            lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
-            // Click on the dialogue text area to activate editing
-            const textEl = lineEl.querySelector('[contenteditable], [style*="Libre Baskerville"]');
-            if (textEl) {
-              (textEl as HTMLElement).click();
-            }
-          }
-        }, 100);
-      }
-    })();
-  }, [pendingDialogue, projectId, scenes, setPendingDialogue, handleQuickAddLine]);
+    const editor = sceneEditorRefs.current[targetSceneId];
+    if (!editor) return;
 
-  const handleEditLine = useCallback(
-    async (lineId: string, updates: { text?: string; character?: string }) => {
-      if (!projectId) return;
-      // Save previous state for undo
-      const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
-      const prevLine = scene?.lines.find((l) => l.id === lineId);
-      const prev: { text?: string; character?: string } = {};
-      if (updates.text !== undefined && prevLine) prev.text = prevLine.text;
-      if (updates.character !== undefined && prevLine) prev.character = prevLine.character || "";
-      try {
-        const res = await fetch(`/api/projects/${projectId}/scenes`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lineId, ...updates }),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (scene) {
-          if (Object.keys(prev).length > 0) {
-            undoStackRef.current.push({ type: "edit-line", sceneId: scene.id, lineId, prev });
-            setUndoCount(undoStackRef.current.length);
-          }
-          updateLine(scene.id, lineId, { text: data.text, character: data.character });
-          broadcast?.({ type: "line-update", sceneId: scene.id, lineId, updates: { text: data.text, character: data.character } });
-        }
-      } catch {}
-    },
-    [projectId, scenes, updateLine, broadcast]
-  );
+    editor.focus();
 
-  const handleDeleteLine = useCallback(
-    async (lineId: string) => {
-      if (!projectId) return;
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/scenes?lineId=${lineId}`,
-          { method: "DELETE" }
-        );
-        if (!res.ok) return;
-        const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
-        if (scene) {
-          deleteLine(scene.id, lineId);
-          broadcast?.({ type: "line-delete", sceneId: scene.id, lineId });
-        }
-      } catch {}
-    },
-    [projectId, scenes, deleteLine, broadcast]
-  );
+    // Ensure we have a selection in this editor
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
+      // Place cursor at end
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+
+    // Insert character name as styled block + empty line for dialogue
+    const charHtml = `<div data-character="${character}" style="${CHAR_NAME_STYLE}">${character}</div><div><br></div>`;
+    document.execCommand("insertHTML", false, charHtml);
+  }, [pendingDialogue, scenes, setPendingDialogue]);
 
   const handleEditSceneTitle = useCallback(
     async (sceneId: string, title: string) => {
@@ -404,10 +353,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     async (sceneId: string) => {
       if (!projectId) return;
       try {
-        const res = await fetch(
-          `/api/projects/${projectId}/scenes?sceneId=${sceneId}`,
-          { method: "DELETE" }
-        );
+        const res = await fetch(`/api/projects/${projectId}/scenes?sceneId=${sceneId}`, {
+          method: "DELETE",
+        });
         if (!res.ok) return;
         deleteScene(sceneId);
         broadcast?.({ type: "scene-delete", sceneId });
@@ -430,8 +378,16 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
         });
         if (!res.ok) return;
         const data = await res.json();
-        updateLine(action.sceneId, action.lineId, { text: data.text, character: data.character });
-        broadcast?.({ type: "line-update", sceneId: action.sceneId, lineId: action.lineId, updates: { text: data.text, character: data.character } });
+        updateLine(action.sceneId, action.lineId, {
+          text: data.text,
+          character: data.character,
+        });
+        broadcast?.({
+          type: "line-update",
+          sceneId: action.sceneId,
+          lineId: action.lineId,
+          updates: { text: data.text, character: data.character },
+        });
       } catch {}
     } else if (action.type === "edit-title") {
       try {
@@ -452,9 +408,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     if (!canWrite) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        // Only intercept if not inside a contentEditable (browser handles its own undo there)
         const active = document.activeElement;
-        if (active && (active as HTMLElement).isContentEditable) return;
+        if (active && ((active as HTMLElement).isContentEditable || active.tagName === "TEXTAREA"))
+          return;
         if (undoStackRef.current.length > 0) {
           e.preventDefault();
           handleUndo();
@@ -465,8 +421,23 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     return () => window.removeEventListener("keydown", handler);
   }, [canWrite, handleUndo]);
 
-  // Group scenes for "add line" buttons
-  const sceneIds = scenes.map((s) => s.id);
+  // Toolbar formatting helpers
+  const applyStageDirection = useCallback(() => {
+    document.execCommand("italic", false);
+    // Re-focus the editor
+    const active = document.querySelector("[contenteditable]:focus") as HTMLElement;
+    if (active) active.focus();
+  }, []);
+
+  const insertCharacterAtCursor = useCallback(
+    (character: string) => {
+      const active = document.querySelector("[contenteditable]:focus") as HTMLElement;
+      if (!active) return;
+      const charHtml = `<div data-character="${character}" style="${CHAR_NAME_STYLE}">${character}</div><div><br></div>`;
+      document.execCommand("insertHTML", false, charHtml);
+    },
+    []
+  );
 
   return (
     <div
@@ -474,7 +445,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
       className="flex-1 overflow-y-auto"
       style={{ padding: isMobile ? "0 8px 80px" : "0 32px 80px" }}
     >
-      {/* Sticky format toolbar */}
+      {/* Sticky toolbar */}
       {canWrite && (
         <div
           className="sticky top-0 z-10 flex items-center justify-center gap-1 py-2 px-1"
@@ -483,41 +454,14 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
             borderBottom: "1px solid var(--stage-hover)",
           }}
         >
-          <FormatBarButton
-            label="B"
-            title="Bold (Ctrl+B)"
-            bold
-            onClick={() => {
-              document.execCommand("bold", false);
-              restoreFocusToEditor();
-            }}
-          />
-          <FormatBarButton
-            label={"\u2022 List"}
-            title="Toggle bullet on current line"
-            onClick={() => {
-              toggleBulletOnCurrentLine();
-              restoreFocusToEditor();
-            }}
-          />
-          <FormatBarButton
-            label={"\u2192 Indent"}
-            title="Indent current line (Tab)"
-            onClick={() => {
-              indentCurrentLine();
-              restoreFocusToEditor();
-            }}
-          />
-          <FormatBarButton
-            label={"\u2190 Outdent"}
-            title="Outdent current line (Shift+Tab)"
-            onClick={() => {
-              outdentCurrentLine();
-              restoreFocusToEditor();
-            }}
+          <ToolbarButton
+            label="Stage Direction"
+            title="Toggle italic stage direction (Ctrl+I)"
+            italic
+            onClick={applyStageDirection}
           />
           <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 4px" }} />
-          <FormatBarButton
+          <ToolbarButton
             label={`\u21A9 Undo${undoCount > 0 ? ` (${undoCount})` : ""}`}
             title="Undo last edit (Ctrl+Z)"
             onClick={handleUndo}
@@ -525,20 +469,23 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           />
         </div>
       )}
-      <div style={{ maxWidth: isMobile ? "100%" : 740, margin: "0 auto", paddingTop: isMobile ? 8 : 16 }}>
+
+      <div
+        style={{
+          maxWidth: isMobile ? "100%" : 740,
+          margin: "0 auto",
+          paddingTop: isMobile ? 8 : 16,
+        }}
+      >
         {/* Add scene at the top */}
         {canWrite && scenes.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             {showAddScene && scenePosition === "start" ? (
               <AddSceneForm
-                newAct={newAct}
-                setNewAct={setNewAct}
-                newSceneNum={newSceneNum}
-                setNewSceneNum={setNewSceneNum}
-                newSceneTitle={newSceneTitle}
-                setNewSceneTitle={setNewSceneTitle}
-                sceneSaving={sceneSaving}
-                scriptTextSize={scriptTextSize}
+                newAct={newAct} setNewAct={setNewAct}
+                newSceneNum={newSceneNum} setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle} setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving} scriptTextSize={scriptTextSize}
                 onSubmit={handleCreateScene}
                 onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
               />
@@ -546,12 +493,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
               <button
                 onClick={() => { setScenePosition("start"); setShowAddScene(true); }}
                 className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 16,
-                  color: "var(--stage-dim)",
-                  border: "1px dashed var(--stage-border-subtle)",
-                }}
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 16, color: "var(--stage-dim)", border: "1px dashed var(--stage-border-subtle)" }}
               >
                 + Add Scene Before
               </button>
@@ -559,219 +501,106 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           </div>
         )}
 
-        {allLines.map((line, idx) => {
-          const isSceneEnd = sceneIds.some(
-            (sid) => sceneEndIndices[sid] === idx
-          );
-          const endSceneId = isSceneEnd
-            ? Object.entries(sceneEndIndices).find(([, i]) => i === idx)?.[0]
-            : null;
-
-          const isActHeader = line.type === "ACT_HEADER";
-          const actKey = isActHeader ? line.id.replace("act-", "") : "";
+        {scenes.map((scene, si) => {
+          const isNewAct = si === 0 || scene.act !== scenes[si - 1].act;
+          const actKey = String(scene.act);
           const afterActPos = `after-act-${actKey}`;
 
           return (
-            <div key={line.id}>
+            <div key={scene.id}>
+              {/* ACT header */}
+              {isNewAct && (
+                <>
+                  <div
+                    className="pt-8 pb-4 text-center"
+                    style={{
+                      fontFamily: "Playfair Display, serif",
+                      fontSize: 28, fontWeight: 700, letterSpacing: "0.15em",
+                      color: "var(--stage-gold)",
+                      borderBottom: "1px solid rgba(232, 197, 71, 0.18)",
+                      marginBottom: 16,
+                    }}
+                  >
+                    ACT {actNumToWord(scene.act)}
+                  </div>
+                  {canWrite && (
+                    <div style={{ margin: "8px 0" }}>
+                      {showAddScene && scenePosition === afterActPos ? (
+                        <AddSceneForm
+                          newAct={newAct} setNewAct={setNewAct}
+                          newSceneNum={newSceneNum} setNewSceneNum={setNewSceneNum}
+                          newSceneTitle={newSceneTitle} setNewSceneTitle={setNewSceneTitle}
+                          sceneSaving={sceneSaving} scriptTextSize={scriptTextSize}
+                          onSubmit={handleCreateScene}
+                          onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => { setNewAct(actKey); setNewSceneNum("0"); setScenePosition(afterActPos); setShowAddScene(true); }}
+                          className="w-full px-4 py-2 rounded-lg transition-colors hover:bg-white/3"
+                          style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-dim)", border: "1px dashed var(--stage-border-subtle)" }}
+                        >
+                          + Add Scene
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Scene header */}
               <ScriptLine
-                ref={(el) => {
-                  lineRefs.current[line.id] = el;
-                }}
-                line={line}
+                line={{
+                  id: `scene-header-${scene.id}`,
+                  sceneId: scene.id,
+                  type: "SCENE_HEADER" as any,
+                  text: `Scene ${scene.scene} \u2014 ${scene.title}`,
+                  sortOrder: -1,
+                  cues: [],
+                  _sceneId: scene.id,
+                } as any}
                 visibleCueTypes={roleConfig.visibleCueTypes}
                 activeCueId={activeCueId}
                 activeRole={activeRole}
                 onCueClick={handleCueClick}
-                onAddCue={handleAddCue}
-                onAddComment={handleAddComment}
-                showAddButton={canAddCues}
                 canEdit={canWrite}
                 scriptTextSize={scriptTextSize}
-                onEditLine={handleEditLine}
-                onDeleteLine={handleDeleteLine}
                 onEditSceneTitle={handleEditSceneTitle}
                 onDeleteScene={handleDeleteScene}
                 onTyping={handleTyping}
-                onResolveComment={handleResolveComment}
-                onDeleteComment={handleDeleteComment}
-                updateCursor={updateCursor}
+                updateCursor={handleUpdateCursor}
               />
 
-              {/* + Add Scene after ACT header */}
-              {isActHeader && canWrite && (
-                <div style={{ margin: "8px 0" }}>
-                  {showAddScene && scenePosition === afterActPos ? (
+              {/* Single text box for all scene content */}
+              <SceneTextBox
+                scene={scene}
+                canEdit={canWrite}
+                scriptTextSize={scriptTextSize}
+                isMobile={isMobile}
+                onSave={(text) => handleSaveSceneContent(scene.id, text)}
+                onTyping={(val) => handleSceneTyping(scene.id, val)}
+                onFocus={() => handleSceneFocus(scene.id)}
+                onBlur={handleSceneBlur}
+                editorRef={(el) => { sceneEditorRefs.current[scene.id] = el; }}
+              />
+
+              {/* Add scene between */}
+              {canWrite && (
+                <div style={{ marginTop: 8, marginBottom: 8 }}>
+                  {showAddScene && scenePosition === `between-${scene.id}` ? (
                     <AddSceneForm
-                      newAct={newAct}
-                      setNewAct={setNewAct}
-                      newSceneNum={newSceneNum}
-                      setNewSceneNum={setNewSceneNum}
-                      newSceneTitle={newSceneTitle}
-                      setNewSceneTitle={setNewSceneTitle}
-                      sceneSaving={sceneSaving}
-                      scriptTextSize={scriptTextSize}
+                      newAct={newAct} setNewAct={setNewAct}
+                      newSceneNum={newSceneNum} setNewSceneNum={setNewSceneNum}
+                      newSceneTitle={newSceneTitle} setNewSceneTitle={setNewSceneTitle}
+                      sceneSaving={sceneSaving} scriptTextSize={scriptTextSize}
                       onSubmit={handleCreateScene}
                       onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
                     />
                   ) : (
                     <button
-                      onClick={() => {
-                        setNewAct(actKey);
-                        setNewSceneNum("0");
-                        setScenePosition(afterActPos);
-                        setShowAddScene(true);
-                      }}
+                      onClick={() => { setNewAct(String(scene.act)); setNewSceneNum(String(scene.scene + 1)); setScenePosition(`between-${scene.id}`); setShowAddScene(true); }}
                       className="w-full px-4 py-2 rounded-lg transition-colors hover:bg-white/3"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 14,
-                        color: "var(--stage-dim)",
-                        border: "1px dashed var(--stage-border-subtle)",
-                      }}
-                    >
-                      + Add Scene
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Inline comment form */}
-              {commentingLine === line.id && (
-                <div
-                  className="ml-4 mt-1 mb-2 p-3 rounded-lg"
-                  style={{
-                    background: "rgba(71, 184, 232, 0.05)",
-                    border: "1px solid rgba(71, 184, 232, 0.2)",
-                  }}
-                >
-                  {commentSelectedText && (
-                    <div
-                      className="mb-2 px-2 py-1 rounded"
-                      style={{
-                        fontFamily: "Libre Baskerville, serif",
-                        fontSize: 12,
-                        color: "var(--stage-muted)",
-                        fontStyle: "italic",
-                        background: "var(--stage-hover)",
-                        borderLeft: "2px solid #47B8E8",
-                      }}
-                    >
-                      &ldquo;{commentSelectedText}&rdquo;
-                    </div>
-                  )}
-                  <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a comment..."
-                    rows={2}
-                    className="w-full px-3 py-2 rounded resize-none"
-                    style={{
-                      fontFamily: "DM Mono, monospace",
-                      fontSize: 13,
-                      background: "var(--stage-bg)",
-                      border: "1px solid var(--stage-border)",
-                      color: "var(--stage-text)",
-                      outline: "none",
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        handleSubmitComment();
-                      }
-                      if (e.key === "Escape") {
-                        setCommentingLine(null);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={handleSubmitComment}
-                      disabled={commentSaving || !commentText.trim()}
-                      className="px-3 py-1.5 rounded transition-colors"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "var(--stage-info)",
-                        background: "rgba(71, 184, 232, 0.1)",
-                        border: "1px solid rgba(71, 184, 232, 0.3)",
-                        opacity: commentSaving || !commentText.trim() ? 0.5 : 1,
-                      }}
-                    >
-                      {commentSaving ? "Posting..." : "Comment"}
-                    </button>
-                    <button
-                      onClick={() => setCommentingLine(null)}
-                      className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 11,
-                        color: "var(--stage-muted)",
-                        border: "1px solid var(--stage-border-subtle)",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <span
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 10,
-                        color: "var(--stage-faint)",
-                        alignSelf: "center",
-                      }}
-                    >
-                      Ctrl+Enter to submit
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick-add text area at end of each scene */}
-              {isSceneEnd && endSceneId && canWrite && (
-                <QuickAddArea
-                  sceneId={endSceneId}
-                  scriptTextSize={scriptTextSize}
-                  isMobile={isMobile}
-                  onAddLine={handleQuickAddLine}
-                  inputRef={(el) => { quickAddRefs.current[endSceneId] = el; }}
-                />
-              )}
-
-              {/* + Add Scene between scenes */}
-              {isSceneEnd && endSceneId && canWrite && (
-                <div style={{ marginBottom: 8 }}>
-                  {showAddScene && scenePosition === `between-${endSceneId}` ? (
-                    <AddSceneForm
-                      newAct={newAct}
-                      setNewAct={setNewAct}
-                      newSceneNum={newSceneNum}
-                      setNewSceneNum={setNewSceneNum}
-                      newSceneTitle={newSceneTitle}
-                      setNewSceneTitle={setNewSceneTitle}
-                      sceneSaving={sceneSaving}
-                      scriptTextSize={scriptTextSize}
-                      onSubmit={handleCreateScene}
-                      onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const scene = scenes.find((s) => s.id === endSceneId);
-                        if (scene) {
-                          setNewAct(String(scene.act));
-                          setNewSceneNum(String(scene.scene + 1));
-                        }
-                        setScenePosition(`between-${endSceneId}`);
-                        setShowAddScene(true);
-                      }}
-                      className="w-full px-4 py-2 rounded-lg transition-colors hover:bg-white/3"
-                      style={{
-                        fontFamily: "DM Mono, monospace",
-                        fontSize: 14,
-                        color: "var(--stage-dim)",
-                        border: "1px dashed var(--stage-border-subtle)",
-                      }}
+                      style={{ fontFamily: "DM Mono, monospace", fontSize: 14, color: "var(--stage-dim)", border: "1px dashed var(--stage-border-subtle)" }}
                     >
                       + Add Scene
                     </button>
@@ -782,45 +611,26 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           );
         })}
 
-        {allLines.length === 0 && !showAddScene && (
+        {scenes.length === 0 && !showAddScene && (
           <div className="text-center py-20">
-            <p
-              style={{
-                fontFamily: "Playfair Display, serif",
-                fontSize: 20,
-                color: "var(--stage-faint)",
-              }}
-            >
+            <p style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: "var(--stage-faint)" }}>
               No script content yet
             </p>
-            <p
-              style={{
-                fontFamily: "DM Mono, monospace",
-                fontSize: 12,
-                color: "var(--stage-ultra-faint)",
-                marginTop: 8,
-              }}
-            >
-              {canWrite
-                ? "Add a scene below to start writing"
-                : "Waiting for content to be added"}
+            <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "var(--stage-ultra-faint)", marginTop: 8 }}>
+              {canWrite ? "Add a scene below to start writing" : "Waiting for content to be added"}
             </p>
           </div>
         )}
 
-        {/* Add Scene button / form at bottom */}
+        {/* Add Scene at bottom */}
         {canWrite && (
           <div style={{ marginTop: 24 }}>
             {showAddScene && scenePosition === "end" ? (
               <AddSceneForm
-                newAct={newAct}
-                setNewAct={setNewAct}
-                newSceneNum={newSceneNum}
-                setNewSceneNum={setNewSceneNum}
-                newSceneTitle={newSceneTitle}
-                setNewSceneTitle={setNewSceneTitle}
-                sceneSaving={sceneSaving}
-                scriptTextSize={scriptTextSize}
+                newAct={newAct} setNewAct={setNewAct}
+                newSceneNum={newSceneNum} setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle} setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving} scriptTextSize={scriptTextSize}
                 onSubmit={handleCreateScene}
                 onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
               />
@@ -828,12 +638,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
               <button
                 onClick={() => { setScenePosition("end"); setShowAddScene(true); }}
                 className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 16,
-                  color: "var(--stage-dim)",
-                  border: "1px dashed var(--stage-border-subtle)",
-                }}
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 16, color: "var(--stage-dim)", border: "1px dashed var(--stage-border-subtle)" }}
               >
                 + Add Scene
               </button>
@@ -841,19 +646,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           </div>
         )}
 
-        {/* + New Act button */}
+        {/* New Act */}
         {canWrite && (
           <div style={{ marginTop: 12 }}>
             {showAddScene && scenePosition === "new-act" ? (
               <AddSceneForm
-                newAct={newAct}
-                setNewAct={setNewAct}
-                newSceneNum={newSceneNum}
-                setNewSceneNum={setNewSceneNum}
-                newSceneTitle={newSceneTitle}
-                setNewSceneTitle={setNewSceneTitle}
-                sceneSaving={sceneSaving}
-                scriptTextSize={scriptTextSize}
+                newAct={newAct} setNewAct={setNewAct}
+                newSceneNum={newSceneNum} setNewSceneNum={setNewSceneNum}
+                newSceneTitle={newSceneTitle} setNewSceneTitle={setNewSceneTitle}
+                sceneSaving={sceneSaving} scriptTextSize={scriptTextSize}
                 onSubmit={handleCreateScene}
                 onCancel={() => { setShowAddScene(false); setNewSceneTitle(""); }}
               />
@@ -867,12 +668,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
                   setShowAddScene(true);
                 }}
                 className="w-full px-4 py-3 rounded-lg transition-colors hover:bg-white/3"
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 16,
-                  color: "var(--stage-gold)",
-                  border: "1px dashed var(--stage-gold-border)",
-                }}
+                style={{ fontFamily: "DM Mono, monospace", fontSize: 16, color: "var(--stage-gold)", border: "1px dashed var(--stage-gold-border)" }}
               >
                 + New Act
               </button>
@@ -884,173 +680,218 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   );
 }
 
-// ---- Quick-add text area at end of each scene ----
+// ---- Scene Text Box (contentEditable) ----
 
-function QuickAddArea({
-  sceneId,
+function SceneTextBox({
+  scene,
+  canEdit,
   scriptTextSize,
   isMobile,
-  onAddLine,
-  inputRef,
+  onSave,
+  onTyping,
+  onFocus,
+  onBlur,
+  editorRef,
 }: {
-  sceneId: string;
+  scene: SceneView;
+  canEdit: boolean;
   scriptTextSize: number;
   isMobile: boolean;
-  onAddLine: (sceneId: string, type: LineType, text: string, character?: string) => Promise<any>;
-  inputRef: (el: HTMLTextAreaElement | null) => void;
+  onSave: (text: string) => void;
+  onTyping?: (value: string) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+  editorRef: (el: HTMLDivElement | null) => void;
 }) {
-  const [text, setText] = useState("");
-  const [saving, setSaving] = useState(false);
+  const localRef = useRef<HTMLDivElement | null>(null);
+  const savedTextRef = useRef<string>("");
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selfSaveRef = useRef(false);
 
-  const handleSubmit = async () => {
-    if (!text.trim() || saving) return;
-    setSaving(true);
-    try {
-      await onAddLine(sceneId, "STAGE_DIRECTION", text.trim());
-      setText("");
-    } finally {
-      setSaving(false);
+  const initialHtml = useMemo(() => sceneLinesToHtml(scene.lines) || "<div><br></div>", [scene.lines]);
+  const initialText = useMemo(() => linesToText(scene.lines), [scene.lines]);
+
+  // Remote cursor indicators for this scene
+  const remoteCursors = useStageStore((s) => s.remoteCursors).filter((c) =>
+    scene.lines.some((l) => l.id === c.lineId)
+  );
+
+  // Set initial content & sync external updates
+  useEffect(() => {
+    savedTextRef.current = initialText;
+    if (localRef.current && document.activeElement !== localRef.current) {
+      if (selfSaveRef.current) {
+        selfSaveRef.current = false;
+        return; // Skip DOM update after our own save
+      }
+      localRef.current.innerHTML = initialHtml;
     }
-  };
+  }, [initialHtml, initialText]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
+
+  const handleInput = useCallback(() => {
+    if (!localRef.current || !onTyping) return;
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      const text = localRef.current?.innerText || "";
+      onTyping(text);
+    }, 80);
+  }, [onTyping]);
+
+  const handleBlur = useCallback(() => {
+    if (!localRef.current) return;
+    const currentText = localRef.current.innerText?.trim() || "";
+    if (currentText !== savedTextRef.current.trim()) {
+      selfSaveRef.current = true;
+      onSave(currentText);
+      savedTextRef.current = currentText;
+    }
+    onBlur();
+  }, [onSave, onBlur]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+  }, []);
+
+  if (!canEdit) {
+    return (
+      <div style={{ position: "relative" }}>
+        {remoteCursors.length > 0 && (
+          <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
+            <RemoteCursorIndicator cursors={remoteCursors} />
+          </div>
+        )}
+        <div
+          style={{
+            fontFamily: "Libre Baskerville, serif",
+            fontSize: scriptTextSize,
+            color: "var(--stage-text)",
+            lineHeight: 1.75,
+            padding: isMobile ? "8px" : "8px 16px",
+            minHeight: 60,
+          }}
+          dangerouslySetInnerHTML={{
+            __html: initialHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>',
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ marginTop: 4, marginBottom: 16 }}>
-      <textarea
-        ref={inputRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Type here to add a line... (Enter to submit)"
-        rows={1}
-        className="w-full px-4 py-3 rounded-lg resize-none transition-colors"
-        style={{
-          fontFamily: "DM Mono, monospace",
-          fontSize: isMobile ? 14 : scriptTextSize,
-          background: "transparent",
-          border: "1px dashed var(--stage-border)",
-          color: "var(--stage-text)",
-          outline: "none",
-          lineHeight: 1.7,
-          opacity: text ? 1 : 0.6,
+    <div style={{ marginBottom: 16, position: "relative" }}>
+      {remoteCursors.length > 0 && (
+        <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
+          <RemoteCursorIndicator cursors={remoteCursors} />
+        </div>
+      )}
+      <div
+        ref={(el) => {
+          const isInit = !localRef.current && el;
+          localRef.current = el;
+          editorRef(el);
+          if (isInit && el) {
+            el.innerHTML = initialHtml;
+          }
         }}
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck
+        onInput={handleInput}
         onFocus={(e) => {
-          e.currentTarget.style.border = "1px solid var(--stage-border)";
+          onFocus();
+          e.currentTarget.style.borderColor = "var(--stage-border)";
           e.currentTarget.style.background = "var(--stage-line-hover)";
-          e.currentTarget.style.opacity = "1";
         }}
         onBlur={(e) => {
-          if (!text) {
-            e.currentTarget.style.border = "1px dashed var(--stage-border)";
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.opacity = "0.6";
+          // Don't blur if clicking toolbar
+          const related = e.relatedTarget as HTMLElement | null;
+          if (related?.closest("[data-toolbar]")) {
+            setTimeout(() => localRef.current?.focus(), 0);
+            return;
           }
+          e.currentTarget.style.borderColor = "var(--stage-border-subtle)";
+          e.currentTarget.style.background = "rgba(255,255,255,0.01)";
+          handleBlur();
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
-          }
+        onPaste={handlePaste}
+        className="w-full rounded-lg transition-colors"
+        style={{
+          fontFamily: "Libre Baskerville, serif",
+          fontSize: isMobile ? 14 : scriptTextSize,
+          color: "var(--stage-text)",
+          lineHeight: 1.75,
+          whiteSpace: "pre-wrap",
+          padding: isMobile ? "12px" : "12px 20px",
+          background: "rgba(255,255,255,0.01)",
+          border: "1px solid var(--stage-border-subtle)",
+          borderRadius: 6,
+          outline: "none",
+          minHeight: 150,
+          cursor: "text",
         }}
+        data-placeholder="Start writing your scene..."
       />
     </div>
   );
 }
 
-// ---- Format bar helpers (shared with ScriptLine) ----
+// ---- Remote Cursor Indicator ----
 
-function getCurrentLineText(): { text: string; node: Text; offset: number } | null {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  let node: Node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) {
-    if (node.childNodes.length > 0 && range.startOffset < node.childNodes.length) {
-      node = node.childNodes[range.startOffset];
-    }
-    if (node.nodeType !== Node.TEXT_NODE) return null;
-  }
-  const text = node.textContent || "";
-  return { text, node: node as Text, offset: range.startOffset };
+function RemoteCursorIndicator({
+  cursors,
+}: {
+  cursors: Array<{ userId: string; name: string; color: string; field: "text" | "character" | "title" | null }>;
+}) {
+  if (cursors.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 mb-0.5" style={{ minHeight: 18 }}>
+      {cursors.map((c) => (
+        <div
+          key={c.userId}
+          className="flex items-center gap-1 animate-fade-in"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 10, fontWeight: 600,
+            color: c.color,
+            background: `${c.color}15`,
+            border: `1px solid ${c.color}40`,
+            borderRadius: 3,
+            padding: "1px 6px",
+            lineHeight: 1.4,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+              background: c.color, animation: "pulse-dot 1.5s ease-in-out infinite",
+            }}
+          />
+          {c.name}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function indentCurrentLine() {
-  const info = getCurrentLineText();
-  if (!info) {
-    document.execCommand("insertText", false, "    ");
-    return;
-  }
-  const { text, node, offset } = info;
-  const beforeCursor = text.slice(0, offset);
-  const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-  const newText = text.slice(0, lineStart) + "    " + text.slice(lineStart);
-  node.textContent = newText;
-  const sel = window.getSelection();
-  const newRange = document.createRange();
-  newRange.setStart(node, offset + 4);
-  newRange.collapse(true);
-  sel?.removeAllRanges();
-  sel?.addRange(newRange);
-}
+// ---- Toolbar Button ----
 
-function outdentCurrentLine() {
-  const info = getCurrentLineText();
-  if (!info) return;
-  const { text, node, offset } = info;
-  const beforeCursor = text.slice(0, offset);
-  const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-  const lineContent = text.slice(lineStart);
-  const spacesMatch = lineContent.match(/^( {1,4})/);
-  if (!spacesMatch) return;
-  const spacesRemoved = spacesMatch[1].length;
-  const newText = text.slice(0, lineStart) + text.slice(lineStart + spacesRemoved);
-  node.textContent = newText;
-  const sel = window.getSelection();
-  const newRange = document.createRange();
-  newRange.setStart(node, Math.max(lineStart, offset - spacesRemoved));
-  newRange.collapse(true);
-  sel?.removeAllRanges();
-  sel?.addRange(newRange);
-}
-
-function toggleBulletOnCurrentLine() {
-  const info = getCurrentLineText();
-  if (!info) {
-    document.execCommand("insertText", false, "\u2022 ");
-    return;
-  }
-  const { text, node, offset } = info;
-  const beforeCursor = text.slice(0, offset);
-  const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-  const lineContent = text.slice(lineStart);
-  const sel = window.getSelection();
-
-  if (lineContent.startsWith("\u2022 ")) {
-    const newText = text.slice(0, lineStart) + text.slice(lineStart + 2);
-    node.textContent = newText;
-    const newRange = document.createRange();
-    newRange.setStart(node, Math.max(lineStart, offset - 2));
-    newRange.collapse(true);
-    sel?.removeAllRanges();
-    sel?.addRange(newRange);
-  } else {
-    const newText = text.slice(0, lineStart) + "\u2022 " + text.slice(lineStart);
-    node.textContent = newText;
-    const newRange = document.createRange();
-    newRange.setStart(node, offset + 2);
-    newRange.collapse(true);
-    sel?.removeAllRanges();
-    sel?.addRange(newRange);
-  }
-}
-
-function restoreFocusToEditor() {
-  // Try to refocus the last active contentEditable element
-  const active = document.querySelector("[contenteditable]:focus") as HTMLElement;
-  if (active) active.focus();
-}
-
-function FormatBarButton({ label, title, onClick, bold, disabled }: { label: string; title: string; onClick: () => void; bold?: boolean; disabled?: boolean }) {
+function ToolbarButton({
+  label, title, onClick, bold, italic, disabled,
+}: {
+  label: string; title: string; onClick: () => void;
+  bold?: boolean; italic?: boolean; disabled?: boolean;
+}) {
   return (
     <button
+      data-toolbar
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       disabled={disabled}
@@ -1059,6 +900,7 @@ function FormatBarButton({ label, title, onClick, bold, disabled }: { label: str
         fontFamily: "DM Mono, monospace",
         fontSize: 12,
         fontWeight: bold ? 900 : 400,
+        fontStyle: italic ? "italic" : undefined,
         color: disabled ? "var(--stage-ultra-faint)" : "#999",
         background: "transparent",
         border: "1px solid var(--stage-border-subtle)",
@@ -1075,168 +917,67 @@ function FormatBarButton({ label, title, onClick, bold, disabled }: { label: str
   );
 }
 
+// ---- Add Scene Form ----
+
 function AddSceneForm({
-  newAct,
-  setNewAct,
-  newSceneNum,
-  setNewSceneNum,
-  newSceneTitle,
-  setNewSceneTitle,
-  sceneSaving,
-  scriptTextSize,
-  onSubmit,
-  onCancel,
+  newAct, setNewAct, newSceneNum, setNewSceneNum, newSceneTitle, setNewSceneTitle,
+  sceneSaving, scriptTextSize, onSubmit, onCancel,
 }: {
-  newAct: string;
-  setNewAct: (v: string) => void;
-  newSceneNum: string;
-  setNewSceneNum: (v: string) => void;
-  newSceneTitle: string;
-  setNewSceneTitle: (v: string) => void;
-  sceneSaving: boolean;
-  scriptTextSize: number;
-  onSubmit: () => void;
-  onCancel: () => void;
+  newAct: string; setNewAct: (v: string) => void;
+  newSceneNum: string; setNewSceneNum: (v: string) => void;
+  newSceneTitle: string; setNewSceneTitle: (v: string) => void;
+  sceneSaving: boolean; scriptTextSize: number;
+  onSubmit: () => void; onCancel: () => void;
 }) {
   return (
     <div
       className="p-4 rounded-lg space-y-3"
-      style={{
-        background: "var(--stage-line-hover)",
-        border: "1px solid var(--stage-border)",
-      }}
+      style={{ background: "var(--stage-line-hover)", border: "1px solid var(--stage-border)" }}
     >
       <div
         style={{
           fontFamily: "DM Mono, monospace",
           fontSize: Math.round(scriptTextSize * 0.55),
           color: "var(--stage-muted)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          marginBottom: 8,
+          letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8,
         }}
       >
         New Scene
       </div>
-
       <div className="flex gap-3">
         <div style={{ width: 80 }}>
-          <label
-            className="block mb-1"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: Math.round(scriptTextSize * 0.5),
-              color: "var(--stage-muted)",
-            }}
-          >
-            Act
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={newAct}
-            onChange={(e) => setNewAct(e.target.value)}
+          <label className="block mb-1" style={{ fontFamily: "DM Mono, monospace", fontSize: Math.round(scriptTextSize * 0.5), color: "var(--stage-muted)" }}>Act</label>
+          <input type="number" min={0} value={newAct} onChange={(e) => setNewAct(e.target.value)}
             className="w-full px-3 py-2 rounded"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: scriptTextSize,
-              background: "var(--stage-bg)",
-              border: "1px solid var(--stage-border)",
-              color: "var(--stage-text)",
-              outline: "none",
-            }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: scriptTextSize, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)", outline: "none" }}
           />
         </div>
         <div style={{ width: 80 }}>
-          <label
-            className="block mb-1"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: Math.round(scriptTextSize * 0.5),
-              color: "var(--stage-muted)",
-            }}
-          >
-            Scene
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={newSceneNum}
-            onChange={(e) => setNewSceneNum(e.target.value)}
+          <label className="block mb-1" style={{ fontFamily: "DM Mono, monospace", fontSize: Math.round(scriptTextSize * 0.5), color: "var(--stage-muted)" }}>Scene</label>
+          <input type="number" min={0} value={newSceneNum} onChange={(e) => setNewSceneNum(e.target.value)}
             className="w-full px-3 py-2 rounded"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: scriptTextSize,
-              background: "var(--stage-bg)",
-              border: "1px solid var(--stage-border)",
-              color: "var(--stage-text)",
-              outline: "none",
-            }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: scriptTextSize, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)", outline: "none" }}
           />
         </div>
         <div className="flex-1">
-          <label
-            className="block mb-1"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: Math.round(scriptTextSize * 0.5),
-              color: "var(--stage-muted)",
-            }}
-          >
-            Title
-          </label>
-          <input
-            type="text"
-            value={newSceneTitle}
-            onChange={(e) => setNewSceneTitle(e.target.value)}
+          <label className="block mb-1" style={{ fontFamily: "DM Mono, monospace", fontSize: Math.round(scriptTextSize * 0.5), color: "var(--stage-muted)" }}>Title</label>
+          <input type="text" value={newSceneTitle} onChange={(e) => setNewSceneTitle(e.target.value)}
             placeholder="e.g. The Arrival"
             className="w-full px-3 py-2 rounded"
-            style={{
-              fontFamily: "DM Mono, monospace",
-              fontSize: scriptTextSize,
-              background: "var(--stage-bg)",
-              border: "1px solid var(--stage-border)",
-              color: "var(--stage-text)",
-              outline: "none",
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
+            style={{ fontFamily: "DM Mono, monospace", fontSize: scriptTextSize, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)", outline: "none" }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSubmit(); } }}
             autoFocus
           />
         </div>
       </div>
-
       <div className="flex gap-2">
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 11,
-            color: "var(--stage-muted)",
-            border: "1px solid var(--stage-border-subtle)",
-          }}
-        >
+        <button onClick={onCancel} className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
+          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-muted)", border: "1px solid var(--stage-border-subtle)" }}>
           Cancel
         </button>
-        <button
-          onClick={onSubmit}
-          disabled={sceneSaving || !newSceneTitle.trim()}
+        <button onClick={onSubmit} disabled={sceneSaving || !newSceneTitle.trim()}
           className="px-3 py-1.5 rounded transition-colors"
-          style={{
-            fontFamily: "DM Mono, monospace",
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--stage-gold)",
-            background: "#E8C54715",
-            border: "1px solid #E8C54740",
-            opacity: sceneSaving || !newSceneTitle.trim() ? 0.5 : 1,
-          }}
-        >
+          style={{ fontFamily: "DM Mono, monospace", fontSize: 11, fontWeight: 600, color: "var(--stage-gold)", background: "#E8C54715", border: "1px solid #E8C54740", opacity: sceneSaving || !newSceneTitle.trim() ? 0.5 : 1 }}>
           {sceneSaving ? "Creating..." : "Add Scene"}
         </button>
       </div>
@@ -1244,10 +985,7 @@ function AddSceneForm({
   );
 }
 
-export function scrollToLine(
-  lineId: string,
-  lineRefs: Record<string, HTMLDivElement | null>
-) {
+export function scrollToLine(lineId: string, lineRefs: Record<string, HTMLDivElement | null>) {
   const el = lineRefs[lineId];
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });

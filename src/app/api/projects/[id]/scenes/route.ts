@@ -34,7 +34,7 @@ export async function POST(
   const body = await req.json();
   const { act, scene: sceneNum, title, position } = body;
 
-  if (!act || !sceneNum || !title) {
+  if (act == null || sceneNum == null || !title) {
     return NextResponse.json(
       { error: "Act, scene number, and title are required" },
       { status: 400 }

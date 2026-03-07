@@ -985,13 +985,15 @@ function EditableCuedText({
     );
   }
 
+  const WrapTag = tag === "div" ? "div" : "span";
+
   return (
-    <span
+    <WrapTag
       onClick={(e) => {
         clickPosRef.current = { x: e.clientX, y: e.clientY };
         setIsEditing(true);
       }}
-      style={{ cursor: "text" }}
+      style={{ cursor: "text", display: tag === "div" ? "block" : "inline" }}
     >
       <CuedText
         text={text}
@@ -1006,7 +1008,7 @@ function EditableCuedText({
         onAddComment={onAddComment}
         showAddButton={showAddButton}
       />
-    </span>
+    </WrapTag>
   );
 }
 
@@ -1223,17 +1225,30 @@ function EditableText({
       if (clickPos) {
         // Use caretRangeFromPoint to place cursor where the user clicked
         requestAnimationFrame(() => {
+          if (!elRef.current) return;
           try {
             let range: Range | null = null;
             if (document.caretRangeFromPoint) {
               range = document.caretRangeFromPoint(clickPos.x, clickPos.y);
             }
-            if (range && elRef.current?.contains(range.startContainer)) {
+            if (range && elRef.current.contains(range.startContainer)) {
               const sel = window.getSelection();
               if (sel) {
                 sel.removeAllRanges();
                 sel.addRange(range);
               }
+              return;
+            }
+          } catch {}
+          // Fallback: place cursor at end of the nearest text node
+          try {
+            const sel = window.getSelection();
+            if (sel && elRef.current) {
+              const range = document.createRange();
+              range.selectNodeContents(elRef.current);
+              range.collapse(false); // collapse to end
+              sel.removeAllRanges();
+              sel.addRange(range);
             }
           } catch {}
         });
