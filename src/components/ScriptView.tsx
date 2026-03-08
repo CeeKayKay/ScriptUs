@@ -991,9 +991,12 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
             style={{
               height: 32,
               borderRadius: 6,
-              background: activeRole === "WRITER" ? "var(--stage-gold-bg)" : roleConfig.color + "20",
-              border: activeRole === "WRITER" ? "1px solid var(--stage-gold-border)" : `1px solid ${roleConfig.color}60`,
-              color: activeRole === "WRITER" ? "var(--stage-gold)" : roleConfig.color,
+              background: activeRole === "WRITER" ? "var(--stage-gold-bg)"
+                : (activeRole === "ACTOR" || activeRole === "DIRECTOR") ? "var(--stage-hover)" : roleConfig.color + "20",
+              border: activeRole === "WRITER" ? "1px solid var(--stage-gold-border)"
+                : (activeRole === "ACTOR" || activeRole === "DIRECTOR") ? "1px solid var(--stage-border)" : `1px solid ${roleConfig.color}60`,
+              color: activeRole === "WRITER" ? "var(--stage-gold)"
+                : (activeRole === "ACTOR" || activeRole === "DIRECTOR") ? "var(--stage-text)" : roleConfig.color,
               fontFamily: "DM Mono, monospace",
               fontSize: Math.round(scriptTextSize * 0.75),
               fontWeight: 700,
