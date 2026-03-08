@@ -171,6 +171,28 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
             onClick={() => {
               if (c.scriptRef) {
                 setSelectedCommentRef(isSelected ? null : c.scriptRef);
+                if (!isSelected) {
+                  // Scroll to the referenced text in the script
+                  requestAnimationFrame(() => {
+                    // Find underlined span rendered by textToDisplayHtml
+                    const highlighted = document.querySelector('span[style*="text-decoration:underline"][style*="47B8E8"]');
+                    if (highlighted) {
+                      highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
+                      return;
+                    }
+                    // Fallback: search text nodes in the script
+                    const scriptContainer = document.querySelector(".flex-1.overflow-y-auto");
+                    if (!scriptContainer) return;
+                    const walker = document.createTreeWalker(scriptContainer, NodeFilter.SHOW_TEXT);
+                    let node: Text | null;
+                    while ((node = walker.nextNode() as Text | null)) {
+                      if (node.textContent && node.textContent.includes(c.scriptRef!)) {
+                        (node.parentElement || node.parentNode as Element)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        return;
+                      }
+                    }
+                  });
+                }
               }
             }}
           >

@@ -64,8 +64,28 @@ export function CueSidePanel() {
     setExpandedCueId(expandedCueId === cue.id ? null : cue.id);
     setActiveCueId(cue.id === activeCueId ? null : cue.id);
 
-    // Scroll the script to the cue's line
-    if (cue.lineId) {
+    // Scroll to the cue's scriptRef text or its line
+    if (cue.scriptRef) {
+      requestAnimationFrame(() => {
+        // Find the cue badge rendered inline
+        const badge = document.querySelector(`[data-cue-id="${cue.id}"]`);
+        if (badge) {
+          badge.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        // Fallback: search text nodes in the script
+        const scriptContainer = document.querySelector(".flex-1.overflow-y-auto");
+        if (!scriptContainer) return;
+        const walker = document.createTreeWalker(scriptContainer, NodeFilter.SHOW_TEXT);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          if (node.textContent && node.textContent.includes(cue.scriptRef!)) {
+            (node.parentElement || node.parentNode as Element)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+        }
+      });
+    } else if (cue.lineId) {
       const el = document.querySelector(`[data-line-id="${cue.lineId}"]`);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
