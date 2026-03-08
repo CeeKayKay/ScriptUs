@@ -175,6 +175,33 @@ function computeTextDiff(
   };
 }
 
+/** Adjust a cursor offset for a Y.Text change delta (retain/insert/delete ops) */
+function adjustOffsetForDelta(cursorOffset: number, delta: any[]): number {
+  let oldPos = 0;
+  let shift = 0;
+  for (const op of delta) {
+    if (op.retain !== undefined) {
+      oldPos += op.retain;
+    } else if (op.insert !== undefined) {
+      const insertLen = typeof op.insert === "string" ? op.insert.length : 1;
+      if (oldPos <= cursorOffset) {
+        shift += insertLen;
+      }
+      // insert doesn't advance oldPos (new content, not in old text)
+    } else if (op.delete !== undefined) {
+      const deleteStart = oldPos;
+      const deleteEnd = oldPos + op.delete;
+      if (deleteEnd <= cursorOffset) {
+        shift -= op.delete;
+      } else if (deleteStart < cursorOffset) {
+        shift -= cursorOffset - deleteStart;
+      }
+      oldPos += op.delete;
+    }
+  }
+  return Math.max(0, cursorOffset + shift);
+}
+
 /** Save cursor as div-index + local char offset (survives innerHTML rebuild) */
 function saveDivCursorState(el: HTMLDivElement): { divIndex: number; offset: number } | null {
   const sel = window.getSelection();
@@ -1020,17 +1047,16 @@ function SceneTextBox({
 
       if (!localRef.current) return;
 
-      // Save cursor position before DOM rebuild
-      const cursorState =
-        document.activeElement === localRef.current
-          ? saveDivCursorState(localRef.current)
-          : null;
+      // Get cursor offset in OLD DOM (before rebuild) as a Y.Text character offset
+      const isFocused = document.activeElement === localRef.current;
+      const oldOffset = isFocused ? getCursorTextOffset(localRef.current) : null;
 
       localRef.current.innerHTML = newHtml;
 
-      // Restore cursor
-      if (cursorState) {
-        restoreDivCursorState(localRef.current, cursorState);
+      // Restore cursor adjusted for the remote edit delta
+      if (isFocused && oldOffset !== null) {
+        const adjusted = adjustOffsetForDelta(oldOffset, event.changes.delta);
+        setCursorTextOffset(localRef.current, adjusted);
       }
     };
 
