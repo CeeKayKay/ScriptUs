@@ -222,7 +222,9 @@ export const useStageStore = create<StageStore>((set) => ({
           ? {
               ...sc,
               lines: sc.lines.map((l) =>
-                l.id === lineId ? { ...l, cues: [...l.cues, cue] } : l
+                l.id === lineId
+                  ? { ...l, cues: l.cues.some((c) => c.id === cue.id) ? l.cues : [...l.cues, cue] }
+                  : l
               ),
             }
           : sc
