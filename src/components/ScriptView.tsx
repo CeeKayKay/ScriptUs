@@ -205,7 +205,7 @@ function annotateLine(
       const config = CUE_TYPES[ann.cue.type];
       if (sideBubbleDir) {
         // Side-bubble mode: highlighted text gets underline + background only
-        result += `<span data-cue-highlight="${ann.cue.id}" style="background:${ann.color}15;border-bottom:2px solid #47B8E8;padding:1px 0;border-radius:2px;">${segText}</span>`;
+        result += `<span data-cue-highlight="${ann.cue.id}" style="background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${segText}</span>`;
 
         // Bubble is collected and rendered at the div edge (appended after text)
         const bubbleLabel = escapeHtml(ann.cue.label);
@@ -235,11 +235,11 @@ function annotateLine(
     if (sideBubbleDir === "left") {
       result += `<span contenteditable="false" data-cue-id="${sb.id}" style="position:absolute;left:-40px;top:${topOffset}px;height:100%;transform:translateX(-100%);display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
       result += `<span style="${sb.pillStyle}">${sb.bubbleLabel}</span>`;
-      result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;margin-bottom:1px;"></span>`;
+      result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid ${sb.color};flex-shrink:0;margin-bottom:1px;"></span>`;
       result += `</span>`;
     } else {
       result += `<span contenteditable="false" data-cue-id="${sb.id}" style="position:absolute;right:-40px;top:${topOffset}px;height:100%;transform:translateX(100%);display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
-      result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;margin-bottom:1px;"></span>`;
+      result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid ${sb.color};flex-shrink:0;margin-bottom:1px;"></span>`;
       result += `<span style="${sb.pillStyle}">${sb.bubbleLabel}</span>`;
       result += `</span>`;
     }
