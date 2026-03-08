@@ -21,6 +21,10 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
   const [name, setName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   useEffect(() => {
     fetch(`/api/invites/${params.token}`)
@@ -141,7 +145,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
           >
             <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--stage-border)" }}>
               <button
-                onClick={() => { setIsSignUp(false); setAuthError(""); }}
+                onClick={() => { setIsSignUp(false); setAuthError(""); setShowForgotPassword(false); }}
                 className="flex-1 py-2 text-center transition-colors"
                 style={{
                   fontFamily: "DM Mono, monospace",
@@ -153,7 +157,7 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                 Sign In
               </button>
               <button
-                onClick={() => { setIsSignUp(true); setAuthError(""); }}
+                onClick={() => { setIsSignUp(true); setAuthError(""); setShowForgotPassword(false); }}
                 className="flex-1 py-2 text-center transition-colors"
                 style={{
                   fontFamily: "DM Mono, monospace",
@@ -201,6 +205,116 @@ export default function InvitePage({ params: paramsPromise }: PageProps) {
                 style={{ fontFamily: "DM Mono, monospace", fontSize: 13, background: "var(--stage-bg)", border: "1px solid var(--stage-border)", color: "var(--stage-text)" }}
               />
             </div>
+
+            {!isSignUp && !showForgotPassword && (
+              <button
+                type="button"
+                onClick={() => { setShowForgotPassword(true); setForgotEmail(email); setForgotSent(false); }}
+                className="text-left transition-colors hover:underline"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 11,
+                  color: "var(--stage-dim)",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                Forgot password?
+              </button>
+            )}
+
+            {showForgotPassword && (
+              <div
+                className="p-4 rounded-lg space-y-3"
+                style={{ background: "var(--stage-bg)", border: "1px solid var(--stage-border)" }}
+              >
+                {forgotSent ? (
+                  <>
+                    <p style={{ fontFamily: "DM Mono, monospace", fontSize: 12, color: "var(--stage-gold)" }}>
+                      If an account exists with that email, a reset link has been sent.
+                    </p>
+                    <button
+                      onClick={() => { setShowForgotPassword(false); setForgotSent(false); }}
+                      className="px-3 py-1.5 rounded-lg transition-colors"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 11,
+                        color: "var(--stage-muted)",
+                        border: "1px solid var(--stage-border-subtle)",
+                      }}
+                    >
+                      Back to Sign In
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-muted)" }}>
+                      Enter your email to receive a password reset link.
+                    </p>
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full px-4 py-2.5 rounded-lg outline-none"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        fontSize: 13,
+                        background: "var(--stage-surface)",
+                        border: "1px solid var(--stage-border)",
+                        color: "var(--stage-text)",
+                      }}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!forgotEmail.trim()) return;
+                          setForgotSubmitting(true);
+                          try {
+                            await fetch("/api/auth/forgot-password", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ email: forgotEmail.trim() }),
+                            });
+                            setForgotSent(true);
+                          } catch {} finally {
+                            setForgotSubmitting(false);
+                          }
+                        }}
+                        disabled={forgotSubmitting || !forgotEmail.trim()}
+                        className="flex-1 px-4 py-2 rounded-lg transition-colors"
+                        style={{
+                          fontFamily: "DM Mono, monospace",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: "#E8C54715",
+                          border: "1px solid #E8C54740",
+                          color: "var(--stage-gold)",
+                          opacity: forgotSubmitting || !forgotEmail.trim() ? 0.5 : 1,
+                        }}
+                      >
+                        {forgotSubmitting ? "Sending..." : "Send Reset Link"}
+                      </button>
+                      <button
+                        onClick={() => setShowForgotPassword(false)}
+                        className="px-3 py-2 rounded-lg transition-colors"
+                        style={{
+                          fontFamily: "DM Mono, monospace",
+                          fontSize: 12,
+                          color: "var(--stage-muted)",
+                          border: "1px solid var(--stage-border-subtle)",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {isSignUp && (
               <div>

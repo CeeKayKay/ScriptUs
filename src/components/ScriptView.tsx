@@ -1055,6 +1055,7 @@ function SceneTextBox({
   const lastTextRef = useRef<string>("");
   const yTextRef = useRef<Y.Text | null>(null);
   const initializedRef = useRef(false);
+  const domInitializedRef = useRef(false);
   const isDirtyRef = useRef(false);
 
   // Remote cursor indicators for this scene
@@ -1278,11 +1279,11 @@ function SceneTextBox({
         </div>
       )}
       <div
-        ref={(el) => {
-          const isInit = !localRef.current && el;
+        ref={useCallback((el: HTMLDivElement | null) => {
           localRef.current = el;
           editorRef(el);
-          if (isInit && el) {
+          if (el && !domInitializedRef.current) {
+            domInitializedRef.current = true;
             // Set initial content from Y.Text if ready, otherwise from DB
             if (yText && synced && yText.length > 0) {
               const text = yText.toString();
@@ -1293,7 +1294,7 @@ function SceneTextBox({
               el.innerHTML = fallbackHtml;
             }
           }
-        }}
+        }, [])}
         contentEditable
         suppressContentEditableWarning
         spellCheck
