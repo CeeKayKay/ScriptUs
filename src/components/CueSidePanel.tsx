@@ -186,9 +186,20 @@ export function CueSidePanel() {
     try {
       const res = await fetch(`/api/cues?id=${cue.id}`, { method: "DELETE" });
       if (res.ok) {
-        // Remove from store
+        // Remove from store — try lineId first, then scan all lines in the scene
         if (cue.lineId && cue.sceneId) {
           removeCueFromLine(cue.sceneId, cue.lineId, cue.id);
+        } else if (cue.sceneId) {
+          // Cue might not have lineId — remove from any line in the scene
+          const scene = scenes.find((s) => s.id === cue.sceneId);
+          if (scene) {
+            for (const line of scene.lines) {
+              if (line.cues.some((c) => c.id === cue.id)) {
+                removeCueFromLine(cue.sceneId, line.id, cue.id);
+                break;
+              }
+            }
+          }
         }
         setExpandedCueId(null);
         setConfirmDeleteId(null);
