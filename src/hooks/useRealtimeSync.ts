@@ -32,7 +32,16 @@ export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
     const broadcastMap = doc.getMap<string>("broadcast");
     broadcastRef.current = broadcastMap;
 
-    // Listen for changes from other clients
+    // Clear stale broadcast messages on connect — DB fetch is the source of truth
+    if (broadcastMap.size > 0) {
+      doc.transact(() => {
+        for (const key of Array.from(broadcastMap.keys())) {
+          broadcastMap.delete(key);
+        }
+      });
+    }
+
+    // Listen for changes from other clients (only new messages from this point)
     const observer = (event: Y.YMapEvent<string>) => {
       event.changes.keys.forEach((change, key) => {
         if (change.action === "add" || change.action === "update") {
