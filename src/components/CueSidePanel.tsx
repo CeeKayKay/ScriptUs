@@ -238,7 +238,7 @@ export function CueSidePanel() {
             textTransform: "uppercase",
           }}
         >
-          {roleConfig.icon} {activeRole === "SET_DESIGN" ? "Set Design List" : activeRole === "SOUND" ? "Sound Cue Sheet" : activeRole === "LIGHTING" ? "Lighting Cue Sheet" : activeRole === "ACTOR" ? "Blocking Notes" : activeRole === "DIRECTOR" || activeRole === "STAGE_MANAGER" ? "Technical Cues" : activeRole === "PROPS" ? "Props List" : "Cue Sheet"}
+          {roleConfig.icon} Cue Sheet
         </div>
         <div className="flex items-center gap-2">
           <span
