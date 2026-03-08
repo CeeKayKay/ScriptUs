@@ -172,8 +172,8 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
               if (c.scriptRef) {
                 setSelectedCommentRef(isSelected ? null : c.scriptRef);
                 if (!isSelected) {
-                  // Scroll to the referenced text in the script
-                  requestAnimationFrame(() => {
+                  // Wait for React to re-render with the underline, then scroll
+                  setTimeout(() => {
                     // Find underlined span rendered by textToDisplayHtml
                     const highlighted = document.querySelector('span[style*="text-decoration:underline"][style*="47B8E8"]');
                     if (highlighted) {
@@ -191,7 +191,7 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
                         return;
                       }
                     }
-                  });
+                  }, 100);
                 }
               }
             }}
