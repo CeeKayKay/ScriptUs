@@ -1472,6 +1472,60 @@ function SceneTextBox({
     scene.lines.some((l) => l.id === c.lineId)
   );
 
+  const selectedCommentRef = useStageStore((s) => s.selectedCommentRef);
+
+  // Highlight selected comment's scriptRef in editable mode
+  useEffect(() => {
+    const editor = localRef.current;
+    if (!editor || !canEdit) return;
+
+    // Remove previous highlights
+    const existing = editor.querySelectorAll("mark[data-comment-highlight]");
+    existing.forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+    });
+
+    if (!selectedCommentRef) return;
+
+    // Walk text nodes and wrap matches
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    const matches: { node: Text; start: number; end: number }[] = [];
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const text = node.textContent || "";
+      const idx = text.indexOf(selectedCommentRef);
+      if (idx !== -1) {
+        matches.push({ node, start: idx, end: idx + selectedCommentRef.length });
+      }
+    }
+
+    for (const m of matches) {
+      const { node: textNode, start, end } = m;
+      const before = textNode.textContent!.substring(0, start);
+      const matched = textNode.textContent!.substring(start, end);
+      const after = textNode.textContent!.substring(end);
+      const parent = textNode.parentNode!;
+
+      const mark = document.createElement("mark");
+      mark.setAttribute("data-comment-highlight", "true");
+      mark.style.textDecoration = "underline";
+      mark.style.textDecorationColor = "#47B8E8";
+      mark.style.textUnderlineOffset = "3px";
+      mark.style.textDecorationThickness = "2px";
+      mark.style.background = "rgba(71,184,232,0.06)";
+      mark.style.borderRadius = "2px";
+      mark.textContent = matched;
+
+      if (before) parent.insertBefore(document.createTextNode(before), textNode);
+      parent.insertBefore(mark, textNode);
+      if (after) parent.insertBefore(document.createTextNode(after), textNode);
+      parent.removeChild(textNode);
+    }
+  }, [selectedCommentRef, canEdit]);
+
   // DB-based fallback HTML (before Y.Text is ready)
   const fallbackHtml = useMemo(
     () => sceneLinesToHtml(scene.lines) || "<div><br></div>",
@@ -1482,7 +1536,6 @@ function SceneTextBox({
   const [displayHtml, setDisplayHtml] = useState(fallbackHtml);
   // Raw text for annotation overlay (cues + comment underlines)
   const [rawText, setRawText] = useState("");
-  const selectedCommentRef = useStageStore((s) => s.selectedCommentRef);
   const roleConfig = ROLES[activeRole as keyof typeof ROLES];
 
   // All cues in this scene
