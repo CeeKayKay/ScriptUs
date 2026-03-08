@@ -38,6 +38,31 @@ function isCharacterName(line: string): boolean {
 const CHAR_NAME_STYLE =
   "font-family:DM Mono,monospace;font-weight:700;color:var(--stage-gold);letter-spacing:0.05em;margin-top:0.3em;";
 
+/** Normalize text: collapse 2+ consecutive newlines to 1, trim each line, drop blanks */
+function normalizeSceneText(raw: string): string {
+  return raw
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l !== "")
+    .join("\n");
+}
+
+/** Extract clean text from a contentEditable div by walking top-level child nodes.
+ *  Avoids innerText quirks that produce extra \n between <div> elements. */
+function extractEditorText(el: HTMLDivElement): string {
+  const lines: string[] = [];
+  for (const child of Array.from(el.childNodes)) {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const t = (child as HTMLElement).innerText ?? "";
+      lines.push(t);
+    } else if (child.nodeType === Node.TEXT_NODE) {
+      const t = child.textContent ?? "";
+      if (t.trim()) lines.push(t);
+    }
+  }
+  return normalizeSceneText(lines.join("\n"));
+}
+
 function sceneLinesToHtml(lines: ScriptLineView[]): string {
   if (lines.length === 0) return "";
 
@@ -61,11 +86,10 @@ function sceneLinesToHtml(lines: ScriptLineView[]): string {
   }
 
   // Single text blob — detect character names by ALL_CAPS heuristic
-  // Skip empty lines to avoid persistent spacing gaps
-  const text = lines[0].text || "";
+  const text = normalizeSceneText(lines[0].text || "");
+  if (!text) return "";
   return text
     .split("\n")
-    .filter((line) => line.trim() !== "")
     .map((line) => {
       if (isCharacterName(line)) {
         const c = escapeHtml(line.trim());
@@ -775,14 +799,15 @@ function SceneTextBox({
 
   // Set initial content & sync external updates (not our own saves)
   useEffect(() => {
+    if (!localRef.current) return;
+    // Never overwrite while user is actively editing
+    if (document.activeElement === localRef.current) return;
+    // Skip DOM overwrite shortly after our own save to prevent
+    // deleted spaces / formatting from being re-injected
+    if (Date.now() - lastSaveTimeRef.current < 3000) return;
     savedTextRef.current = initialText;
-    if (localRef.current && document.activeElement !== localRef.current) {
-      // Skip DOM overwrite shortly after our own save to prevent
-      // deleted spaces / formatting from being re-injected
-      if (Date.now() - lastSaveTimeRef.current < 3000) return;
-      localRef.current.innerHTML = initialHtml;
-      isDirtyRef.current = false;
-    }
+    localRef.current.innerHTML = initialHtml;
+    isDirtyRef.current = false;
   }, [initialHtml, initialText]);
 
   useEffect(() => {
@@ -796,16 +821,16 @@ function SceneTextBox({
     if (!localRef.current || !onTyping) return;
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => {
-      const text = localRef.current?.innerText || "";
-      onTyping(text);
+      if (!localRef.current) return;
+      onTyping(extractEditorText(localRef.current));
     }, 80);
   }, [onTyping]);
 
   const handleBlur = useCallback(() => {
     if (!localRef.current) return;
-    const currentText = localRef.current.innerText?.trim() || "";
+    const currentText = extractEditorText(localRef.current);
     // Save if content changed OR if user made any edits (isDirty)
-    if (isDirtyRef.current || currentText !== savedTextRef.current.trim()) {
+    if (isDirtyRef.current || currentText !== normalizeSceneText(savedTextRef.current)) {
       lastSaveTimeRef.current = Date.now();
       isDirtyRef.current = false;
       onSave(currentText);
