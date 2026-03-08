@@ -32,11 +32,9 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     activeRole,
     setProject,
     isCuePanelOpen,
-    toggleCuePanel,
     isCueEditorOpen,
     isSettingsOpen,
     isCommentPanelOpen,
-    toggleCommentPanel,
     cuePanelSide,
     setOnlineUsers,
     setRemoteCursors,
@@ -150,17 +148,20 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Cue side panel on left (desktop only for side layout) */}
+        {/* Cue side panel on left */}
         {showSidePanel && cuePanelSide === "left" && !isMobile && <SidePanel />}
+
+        {/* Comment panel on left (when cue panel is on right) */}
+        {isCommentPanelOpen && cuePanelSide === "right" && !isMobile && <CommentSidePanel projectId={params.id} />}
 
         {/* Script panel */}
         <ScriptView broadcast={broadcast} projectId={params.id} updateCursor={yjs.updateCursor} yDoc={yjs.doc} synced={yjs.synced} />
 
-        {/* Cue side panel on right (desktop only for side layout) */}
+        {/* Cue side panel on right */}
         {showSidePanel && cuePanelSide === "right" && !isMobile && <SidePanel />}
 
-        {/* Comment side panel (always on right) */}
-        {isCommentPanelOpen && !isMobile && <CommentSidePanel projectId={params.id} />}
+        {/* Comment panel on right (when cue panel is on left) */}
+        {isCommentPanelOpen && cuePanelSide === "left" && !isMobile && <CommentSidePanel projectId={params.id} />}
       </div>
 
       {/* Mobile: Cue panel overlay */}
@@ -168,70 +169,6 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
       {/* Mobile: Comment panel overlay */}
       {isMobile && isCommentPanelOpen && <CommentSidePanel projectId={params.id} />}
-
-      {/* Floating cue panel toggle (shown when panel is closed) */}
-      {roleConfig.hasCuePanel && !showSidePanel && (
-        <button
-          onClick={toggleCuePanel}
-          style={{
-            position: "fixed",
-            bottom: isMobile ? 20 : 24,
-            right: isMobile ? 16 : 24,
-            zIndex: 30,
-            height: isMobile ? 48 : 40,
-            borderRadius: isMobile ? "50%" : 8,
-            background: roleConfig.color + "20",
-            border: `2px solid ${roleConfig.color}60`,
-            color: roleConfig.color,
-            fontFamily: "DM Mono, monospace",
-            fontSize: isMobile ? 11 : 12,
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 16px var(--stage-overlay)",
-            padding: isMobile ? undefined : "0 14px",
-            width: isMobile ? 48 : "auto",
-            gap: 6,
-          }}
-          title={isWriter ? "Open Characters & Settings" : "Open " + (activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
-        >
-          {roleConfig.icon} {isMobile
-            ? (isWriter ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
-            : (isWriter ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
-        </button>
-      )}
-
-      {/* Floating comment panel toggle */}
-      {activeRole !== "VIEWER" && !isCommentPanelOpen && (
-        <button
-          onClick={toggleCommentPanel}
-          style={{
-            position: "fixed",
-            bottom: isMobile ? 20 : 24,
-            right: isMobile ? (roleConfig.hasCuePanel && !showSidePanel ? 76 : 16) : (roleConfig.hasCuePanel && !showSidePanel ? 200 : 24),
-            zIndex: 30,
-            height: isMobile ? 48 : 40,
-            borderRadius: isMobile ? "50%" : 8,
-            background: "#47B8E820",
-            border: "2px solid #47B8E860",
-            color: "#47B8E8",
-            fontFamily: "DM Mono, monospace",
-            fontSize: isMobile ? 11 : 12,
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 16px var(--stage-overlay)",
-            padding: isMobile ? undefined : "0 14px",
-            width: isMobile ? 48 : "auto",
-            gap: 6,
-          }}
-          title="Open Comments"
-        >
-          {isMobile ? "💬" : "💬 Comments"}
-        </button>
-      )}
 
       {/* Cue editor modal */}
       {isCueEditorOpen && <CueEditor projectId={params.id} broadcast={broadcast} />}

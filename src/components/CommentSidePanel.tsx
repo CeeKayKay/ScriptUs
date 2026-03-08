@@ -126,8 +126,8 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
             onClick={() => setFilter(tab)}
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: fs(0.6),
               fontWeight: filter === tab ? 700 : 400,
+              fontSize: fs(0.7),
               color: filter === tab ? "#47B8E8" : "var(--stage-dim)",
               background: filter === tab ? "#47B8E810" : "transparent",
               border: "none",
@@ -167,14 +167,14 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
             {/* Author + meta */}
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.6), fontWeight: 700, color: "#47B8E8" }}>
+                <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.75), fontWeight: 700, color: "#47B8E8" }}>
                   {c.user.name}
                 </span>
                 {c.role && (
                   <span style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: fs(0.5),
-                    color: "var(--stage-dim)",
+                    fontSize: fs(0.6),
+                    color: "var(--stage-text)",
                     background: "var(--stage-hover)",
                     borderRadius: 3,
                     padding: "1px 5px",
@@ -183,7 +183,7 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
                   </span>
                 )}
               </div>
-              <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.5), color: "var(--stage-faint)" }}>
+              <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.6), color: "var(--stage-faint)" }}>
                 {c.sceneName}
               </span>
             </div>
@@ -192,8 +192,8 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
             {c.scriptRef && (
               <div style={{
                 fontFamily: "Libre Baskerville, serif",
-                fontSize: fs(0.55),
-                color: "var(--stage-muted)",
+                fontSize: fs(0.7),
+                color: "var(--stage-text)",
                 fontStyle: "italic",
                 padding: "3px 8px",
                 marginBottom: 4,
@@ -211,7 +211,7 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
             {/* Comment text */}
             <div style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: fs(0.65),
+              fontSize: fs(0.8),
               color: "var(--stage-text)",
               lineHeight: 1.5,
               whiteSpace: "pre-wrap",
@@ -221,7 +221,7 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
 
             {/* Timestamp + actions */}
             <div className="flex items-center justify-between mt-2">
-              <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.45), color: "var(--stage-faint)" }}>
+              <span style={{ fontFamily: "DM Mono, monospace", fontSize: fs(0.55), color: "var(--stage-faint)" }}>
                 {new Date(c.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </span>
               <div className="flex gap-1 opacity-0 group-hover/comment:opacity-100 transition-opacity">

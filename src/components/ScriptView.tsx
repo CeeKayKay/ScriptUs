@@ -119,9 +119,9 @@ function linesToText(lines: ScriptLineView[]): string {
 /** Check if a line starts with a character name prefix followed by dialogue text.
  *  Returns the character name portion or null. e.g. "JOHN Hello" → "JOHN" */
 function extractCharacterPrefix(line: string): string | null {
-  // Match ALL_CAPS word(s) at start, followed by a space and more text
+  // Match ALL_CAPS word(s) at start, followed by a space and optional text
   const match = line.match(/^([A-Z][A-Z\s\-'\.]+?)\s{2,}(.+)$/) ||
-                line.match(/^([A-Z][A-Z\-'\.]+)\s(.+)$/);
+                line.match(/^([A-Z][A-Z\-'\.]+)\s(.*)$/);
   if (!match) return null;
   const name = match[1].trim();
   if (name.length === 0 || name.length >= 40) return null;
@@ -137,17 +137,23 @@ function textToHtml(text: string): string {
     .split("\n")
     .map((line) => {
       if (!line) return "<div><br></div>";
-      // Full line is a character name (standalone, no dialogue yet)
-      if (isCharacterName(line)) {
-        const c = escapeHtml(line.trim());
-        return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
-      }
-      // Line starts with character name prefix followed by dialogue
+      // Line starts with character name prefix followed by dialogue (or just a space for cursor)
       const charPrefix = extractCharacterPrefix(line);
       if (charPrefix) {
         const rest = line.substring(charPrefix.length);
         const c = escapeHtml(charPrefix);
         return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
+      }
+      // Full line is a character name (standalone, no trailing space)
+      if (isCharacterName(line)) {
+        const trimmed = line.trim();
+        const c = escapeHtml(trimmed);
+        // If line has trailing space (cursor placeholder), render as inline prefix
+        if (line.length > trimmed.length) {
+          const rest = line.substring(trimmed.length);
+          return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
+        }
+        return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
       }
       return `<div>${escapeHtml(line)}</div>`;
     })
@@ -349,6 +355,10 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     scriptTextSize,
     pendingDialogue,
     setPendingDialogue,
+    isCuePanelOpen,
+    toggleCuePanel,
+    isCommentPanelOpen,
+    toggleCommentPanel,
   } = useStageStore();
 
   const projectId = projectIdProp || storeProjectId;
@@ -813,6 +823,68 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       className="flex-1 overflow-y-auto"
       style={{ padding: isMobile ? "0 8px 80px" : "0 32px 80px" }}
     >
+      {/* Panel toggle buttons at top of script area */}
+      {((!roleConfig.hasCuePanel || !isCuePanelOpen) || (activeRole !== "VIEWER" && !isCommentPanelOpen)) && (
+        <div
+          className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5"
+          style={{
+            background: "var(--stage-bg)",
+            borderBottom: "1px solid var(--stage-hover)",
+          }}
+        >
+          {roleConfig.hasCuePanel && !isCuePanelOpen && (
+            <button
+              onClick={toggleCuePanel}
+              style={{
+                height: 32,
+                borderRadius: 6,
+                background: roleConfig.color + "20",
+                border: `1px solid ${roleConfig.color}60`,
+                color: roleConfig.color,
+                fontFamily: "DM Mono, monospace",
+                fontSize: isMobile ? 10 : 11,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 10px",
+                gap: 4,
+                cursor: "pointer",
+              }}
+              title={activeRole === "WRITER" ? "Open Characters & Settings" : activeRole === "PROPS" ? "Open Props List" : "Open Cue Sheet"}
+            >
+              {roleConfig.icon} {isMobile
+                ? (activeRole === "WRITER" ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
+                : (activeRole === "WRITER" ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
+            </button>
+          )}
+          {activeRole !== "VIEWER" && !isCommentPanelOpen && (
+            <button
+              onClick={toggleCommentPanel}
+              style={{
+                height: 32,
+                borderRadius: 6,
+                background: "#47B8E820",
+                border: "1px solid #47B8E860",
+                color: "#47B8E8",
+                fontFamily: "DM Mono, monospace",
+                fontSize: isMobile ? 10 : 11,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 10px",
+                gap: 4,
+                cursor: "pointer",
+              }}
+              title="Open Comments"
+            >
+              {isMobile ? "Comments" : "Comments"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Sticky toolbar */}
       {canWrite && (
         <div
@@ -1276,14 +1348,19 @@ function SceneTextBox({
       // Helper: build correct innerHTML for a line
       const buildLineHtml = (line: string): string => {
         if (!line) return "<br>";
-        if (isCharacterName(line)) {
-          const c = escapeHtml(line.trim());
-          return `<span style="${CHAR_NAME_STYLE}">${c}</span>`;
-        }
         const charPrefix = extractCharacterPrefix(line);
         if (charPrefix) {
           const rest = line.substring(charPrefix.length);
           return `<span style="${CHAR_NAME_STYLE}">${escapeHtml(charPrefix)}</span>${escapeHtml(rest)}`;
+        }
+        if (isCharacterName(line)) {
+          const trimmed = line.trim();
+          const c = escapeHtml(trimmed);
+          if (line.length > trimmed.length) {
+            const rest = line.substring(trimmed.length);
+            return `<span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}`;
+          }
+          return `<span style="${CHAR_NAME_STYLE}">${c}</span>`;
         }
         return escapeHtml(line);
       };

@@ -231,7 +231,7 @@ export function CueSidePanel() {
         <div
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: Math.round(scriptTextSize * 0.55),
+            fontSize: Math.round(scriptTextSize * 0.75),
             fontWeight: 700,
             color: roleConfig.color,
             letterSpacing: "0.1em",
