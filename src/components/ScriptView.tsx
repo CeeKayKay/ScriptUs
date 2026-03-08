@@ -910,12 +910,49 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     return () => window.removeEventListener("keydown", handler);
   }, [canWrite, handleUndo]);
 
+  // Formatting keyboard shortcuts (Tab for indent, Shift+Tab for outdent)
+  useEffect(() => {
+    if (!canWrite) return;
+    const handler = (e: KeyboardEvent) => {
+      const active = document.activeElement as HTMLElement;
+      if (!active?.isContentEditable) return;
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          document.execCommand("outdent", false);
+        } else {
+          document.execCommand("indent", false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canWrite]);
+
   // Toolbar formatting helpers
-  const applyStageDirection = useCallback(() => {
+  const applyBold = useCallback(() => {
+    document.execCommand("bold", false);
+  }, []);
+
+  const applyItalic = useCallback(() => {
     document.execCommand("italic", false);
-    // Re-focus the editor
-    const active = document.querySelector("[contenteditable]:focus") as HTMLElement;
-    if (active) active.focus();
+  }, []);
+
+  const applyBulletList = useCallback(() => {
+    document.execCommand("insertUnorderedList", false);
+  }, []);
+
+  const applyNumberedList = useCallback(() => {
+    document.execCommand("insertOrderedList", false);
+  }, []);
+
+  const applyIndent = useCallback(() => {
+    document.execCommand("indent", false);
+  }, []);
+
+  const applyOutdent = useCallback(() => {
+    document.execCommand("outdent", false);
   }, []);
 
   const insertCharacterAtCursor = useCallback(
@@ -1017,12 +1054,47 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       {/* Sticky toolbar */}
       {canWrite && (
         <div
-          className="sticky top-0 z-10 flex items-center justify-center gap-1 py-2 px-1"
+          className="sticky top-0 z-10 flex items-center justify-center gap-1 py-2 px-1 flex-wrap"
           style={{
             background: "var(--stage-bg)",
             borderBottom: "1px solid var(--stage-hover)",
           }}
         >
+          <ToolbarButton
+            label="B"
+            title="Bold (Ctrl+B)"
+            bold
+            onClick={applyBold}
+          />
+          <ToolbarButton
+            label="I"
+            title="Italic (Ctrl+I)"
+            italic
+            onClick={applyItalic}
+          />
+          <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 2px" }} />
+          <ToolbarButton
+            label="• List"
+            title="Bullet list"
+            onClick={applyBulletList}
+          />
+          <ToolbarButton
+            label="1. List"
+            title="Numbered list"
+            onClick={applyNumberedList}
+          />
+          <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 2px" }} />
+          <ToolbarButton
+            label="→ Indent"
+            title="Indent (Tab)"
+            onClick={applyIndent}
+          />
+          <ToolbarButton
+            label="← Outdent"
+            title="Outdent (Shift+Tab)"
+            onClick={applyOutdent}
+          />
+          <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 2px" }} />
           <ToolbarButton
             label={`\u21A9 Undo${undoCount > 0 ? ` (${undoCount})` : ""}`}
             title="Undo last edit (Ctrl+Z)"
