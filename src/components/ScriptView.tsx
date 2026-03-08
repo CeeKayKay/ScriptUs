@@ -827,6 +827,17 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       {/* Panel toggle buttons at top of script area */}
       {((!roleConfig.hasCuePanel || !isCuePanelOpen) || (activeRole !== "VIEWER" && !isCommentPanelOpen)) && (() => {
         const cueBtnOnLeft = cuePanelSide === "left";
+        const panelLabels: Record<string, [string, string]> = {
+          WRITER: ["Characters & Settings", "EDIT"],
+          PROPS: ["Props List", "PROPS"],
+          SET_DESIGN: ["Set Design List", "SET"],
+          SOUND: ["Sound Cue Sheet", "SOUND"],
+          LIGHTING: ["Lighting Cue Sheet", "LX"],
+          ACTOR: ["Blocking Notes", "BLOCK"],
+          DIRECTOR: ["Technical Cues", "CUES"],
+          STAGE_MANAGER: ["Technical Cues", "CUES"],
+        };
+        const [panelLabel, panelLabelShort] = panelLabels[activeRole] || ["Cue Sheet", "CUE"];
         const cueBtn = roleConfig.hasCuePanel && !isCuePanelOpen && (
           <button
             onClick={toggleCuePanel}
@@ -846,11 +857,9 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
               gap: 4,
               cursor: "pointer",
             }}
-            title={activeRole === "WRITER" ? "Open Characters & Settings" : activeRole === "PROPS" ? "Open Props List" : "Open Cue Sheet"}
+            title={`Open ${panelLabel}`}
           >
-            {roleConfig.icon} {isMobile
-              ? (activeRole === "WRITER" ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
-              : (activeRole === "WRITER" ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
+            {roleConfig.icon} {isMobile ? panelLabelShort : panelLabel}
           </button>
         );
         const commentBtn = activeRole !== "VIEWER" && !isCommentPanelOpen && (

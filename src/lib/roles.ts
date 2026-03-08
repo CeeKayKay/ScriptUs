@@ -19,7 +19,7 @@ export const ROLES: Record<ProjectRole, RoleConfig> = {
     visibleCueTypes: ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION"],
     showAllDialogue: true,
     showStageDirections: true,
-    hasCuePanel: false,
+    hasCuePanel: true,
   },
   ACTOR: {
     id: "ACTOR",
@@ -35,7 +35,7 @@ export const ROLES: Record<ProjectRole, RoleConfig> = {
     id: "LIGHTING",
     label: "Lighting",
     icon: "☀",
-    color: "#E8C547",
+    color: "#C9A020",
     visibleCueTypes: ["LIGHT"],
     showAllDialogue: true,
     showStageDirections: true,
