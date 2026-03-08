@@ -12,6 +12,7 @@ import { ScriptView } from "@/components/ScriptView";
 import { CueSidePanel } from "@/components/CueSidePanel";
 import { WriterSidePanel } from "@/components/WriterSidePanel";
 import { CueEditor } from "@/components/CueEditor";
+import { CommentSidePanel } from "@/components/CommentSidePanel";
 import { Settings } from "@/components/Settings";
 import { ROLES } from "@/lib/roles";
 import type { ProjectRole } from "@/types";
@@ -34,6 +35,8 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     toggleCuePanel,
     isCueEditorOpen,
     isSettingsOpen,
+    isCommentPanelOpen,
+    toggleCommentPanel,
     cuePanelSide,
     setOnlineUsers,
     setRemoteCursors,
@@ -155,10 +158,16 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
         {/* Cue side panel on right (desktop only for side layout) */}
         {showSidePanel && cuePanelSide === "right" && !isMobile && <SidePanel />}
+
+        {/* Comment side panel (always on right) */}
+        {isCommentPanelOpen && !isMobile && <CommentSidePanel projectId={params.id} />}
       </div>
 
       {/* Mobile: Cue panel overlay */}
       {isMobile && showSidePanel && <SidePanel />}
+
+      {/* Mobile: Comment panel overlay */}
+      {isMobile && isCommentPanelOpen && <CommentSidePanel projectId={params.id} />}
 
       {/* Floating cue panel toggle (shown when panel is closed) */}
       {roleConfig.hasCuePanel && !showSidePanel && (
@@ -190,6 +199,37 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
           {roleConfig.icon} {isMobile
             ? (isWriter ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
             : (isWriter ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
+        </button>
+      )}
+
+      {/* Floating comment panel toggle */}
+      {activeRole !== "VIEWER" && !isCommentPanelOpen && (
+        <button
+          onClick={toggleCommentPanel}
+          style={{
+            position: "fixed",
+            bottom: isMobile ? 20 : 24,
+            right: isMobile ? (roleConfig.hasCuePanel && !showSidePanel ? 76 : 16) : (roleConfig.hasCuePanel && !showSidePanel ? 200 : 24),
+            zIndex: 30,
+            height: isMobile ? 48 : 40,
+            borderRadius: isMobile ? "50%" : 8,
+            background: "#47B8E820",
+            border: "2px solid #47B8E860",
+            color: "#47B8E8",
+            fontFamily: "DM Mono, monospace",
+            fontSize: isMobile ? 11 : 12,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 16px var(--stage-overlay)",
+            padding: isMobile ? undefined : "0 14px",
+            width: isMobile ? 48 : "auto",
+            gap: 6,
+          }}
+          title="Open Comments"
+        >
+          {isMobile ? "💬" : "💬 Comments"}
         </button>
       )}
 

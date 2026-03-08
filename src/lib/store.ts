@@ -72,6 +72,8 @@ interface StageStore {
   deleteScene: (sceneId: string) => void;
 
   // Comments
+  isCommentPanelOpen: boolean;
+  toggleCommentPanel: () => void;
   addComment: (lineId: string, comment: CommentView) => void;
   resolveComment: (commentId: string) => void;
   removeComment: (commentId: string) => void;
@@ -338,8 +340,12 @@ export const useStageStore = create<StageStore>((set) => ({
       scenes: s.scenes.filter((sc) => sc.id !== sceneId),
     })),
 
+  isCommentPanelOpen: false,
+  toggleCommentPanel: () => set((s) => ({ isCommentPanelOpen: !s.isCommentPanelOpen })),
+
   addComment: (lineId, comment) =>
     set((s) => ({
+      isCommentPanelOpen: true, // Auto-open panel when a comment is added
       scenes: s.scenes.map((sc) => ({
         ...sc,
         lines: sc.lines.map((l) =>

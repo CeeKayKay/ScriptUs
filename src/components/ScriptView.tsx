@@ -1094,6 +1094,10 @@ function SceneTextBox({
 
   // Selection popup state
   const [selPopup, setSelPopup] = useState<{ x: number; y: number; text: string } | null>(null);
+  // Inline comment input state
+  const [commentInput, setCommentInput] = useState<{ x: number; y: number; scriptRef: string } | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const openCueEditor = useStageStore((s) => s.openCueEditor);
   const addComment = useStageStore((s) => s.addComment);
 
@@ -1140,12 +1144,19 @@ function SceneTextBox({
     setSelPopup(null);
   }, [selPopup, scene.id, scene.lines, openCueEditor]);
 
-  const handleAddComment = useCallback(async () => {
-    if (!selPopup || !projectId) return;
+  const handleAddComment = useCallback(() => {
+    if (!selPopup) return;
+    // Show inline comment input at the selection popup position
+    setCommentInput({ x: selPopup.x, y: selPopup.y + 40, scriptRef: selPopup.text });
+    setCommentText("");
+    setSelPopup(null);
+  }, [selPopup]);
+
+  const handleSubmitComment = useCallback(async () => {
+    if (!commentInput || !commentText.trim() || !projectId) return;
     const lineId = scene.lines[0]?.id;
     if (!lineId) return;
-    const commentText = prompt("Add a comment:");
-    if (!commentText?.trim()) return;
+    setCommentSubmitting(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/comments`, {
         method: "POST",
@@ -1153,7 +1164,7 @@ function SceneTextBox({
         body: JSON.stringify({
           lineId,
           text: commentText.trim(),
-          scriptRef: selPopup.text,
+          scriptRef: commentInput.scriptRef,
           role: activeRole,
         }),
       });
@@ -1162,8 +1173,10 @@ function SceneTextBox({
         addComment(lineId, comment);
       }
     } catch {}
-    setSelPopup(null);
-  }, [selPopup, scene.lines, projectId, activeRole, addComment]);
+    setCommentSubmitting(false);
+    setCommentInput(null);
+    setCommentText("");
+  }, [commentInput, commentText, scene.lines, projectId, activeRole, addComment]);
 
   // Stable ref callback — must be at top level (not in JSX) to avoid hook order issues
   const editorDivRef = useCallback((el: HTMLDivElement | null) => {
@@ -1430,6 +1443,107 @@ function SceneTextBox({
     </div>
   ) : null;
 
+  // Inline comment input popup
+  const commentInputEl = commentInput ? (
+    <div
+      data-toolbar
+      style={{
+        position: "absolute",
+        left: Math.max(20, Math.min(commentInput.x, 280)),
+        top: commentInput.y,
+        transform: "translateX(-50%)",
+        zIndex: 25,
+        background: "var(--stage-surface)",
+        border: "1px solid #47B8E840",
+        borderRadius: 8,
+        padding: "10px 12px",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
+        width: isMobile ? 240 : 280,
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div style={{ fontFamily: "DM Mono, monospace", fontSize: 10, color: "#47B8E8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+        Comment
+      </div>
+      {commentInput.scriptRef && (
+        <div style={{
+          fontFamily: "Libre Baskerville, serif",
+          fontSize: 11,
+          color: "var(--stage-muted)",
+          fontStyle: "italic",
+          padding: "4px 8px",
+          marginBottom: 6,
+          background: "#47B8E808",
+          borderLeft: "2px solid #47B8E840",
+          borderRadius: 2,
+          whiteSpace: "pre-wrap",
+          maxHeight: 40,
+          overflow: "hidden",
+        }}>
+          &ldquo;{commentInput.scriptRef}&rdquo;
+        </div>
+      )}
+      <textarea
+        autoFocus
+        value={commentText}
+        onChange={(e) => setCommentText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmitComment(); }
+          if (e.key === "Escape") { setCommentInput(null); setCommentText(""); }
+        }}
+        placeholder="Type your comment..."
+        rows={2}
+        style={{
+          width: "100%",
+          fontFamily: "DM Mono, monospace",
+          fontSize: 12,
+          color: "var(--stage-text)",
+          background: "var(--stage-bg)",
+          border: "1px solid var(--stage-border)",
+          borderRadius: 4,
+          padding: "6px 8px",
+          outline: "none",
+          resize: "vertical",
+        }}
+      />
+      <div style={{ display: "flex", gap: 6, marginTop: 6, justifyContent: "flex-end" }}>
+        <button
+          onClick={() => { setCommentInput(null); setCommentText(""); }}
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            color: "var(--stage-muted)",
+            background: "none",
+            border: "1px solid var(--stage-border-subtle)",
+            borderRadius: 4,
+            padding: "3px 10px",
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmitComment}
+          disabled={commentSubmitting || !commentText.trim()}
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#47B8E8",
+            background: "#47B8E815",
+            border: "1px solid #47B8E840",
+            borderRadius: 4,
+            padding: "3px 10px",
+            cursor: "pointer",
+            opacity: commentSubmitting || !commentText.trim() ? 0.5 : 1,
+          }}
+        >
+          {commentSubmitting ? "..." : "Add"}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   // For read-only: set innerHTML imperatively via ref so React re-renders
   // (from selection popup state changes) don't destroy in-progress text selection
   const readOnlyRef = useCallback((el: HTMLDivElement | null) => {
@@ -1448,6 +1562,7 @@ function SceneTextBox({
           </div>
         )}
         {selectionPopupEl}
+        {commentInputEl}
         <div
           ref={readOnlyRef}
           style={{
@@ -1473,6 +1588,7 @@ function SceneTextBox({
         </div>
       )}
       {selectionPopupEl}
+      {commentInputEl}
       <div
         ref={editorDivRef}
         contentEditable

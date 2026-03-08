@@ -68,13 +68,19 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
     return null;
   })();
 
-  // Auto-generate label from type and number
+  // Auto-generate or update label when type/number changes
+  // Preserves any user-typed suffix after the Q number
   useEffect(() => {
-    if (!isEditing) {
-      const config = CUE_TYPES[type];
-      setLabel(`${config.label} Q${number}`);
-    }
-  }, [type, number, isEditing]);
+    const config = CUE_TYPES[type];
+    setLabel((prev) => {
+      if (!prev) return `${config.label} Q${number}`;
+      // Match pattern like "PROP Q3 - Gummy Worm" → replace Q3 with Q{number}
+      const match = prev.match(/^(\S+\s+Q)\d+(\s*.*)$/);
+      if (match) return `${match[1]}${number}${match[2]}`;
+      // No match (user cleared label or typed something custom) — generate fresh
+      return `${config.label} Q${number}`;
+    });
+  }, [type, number]);
 
   const handleSave = async () => {
     setSaving(true);
