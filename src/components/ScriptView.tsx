@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import * as Y from "yjs";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -11,6 +12,8 @@ interface ScriptViewProps {
   broadcast?: (msg: any) => void;
   projectId?: string;
   updateCursor?: (lineId: string | null, field?: "text" | "character" | "title" | null) => void;
+  yDoc?: Y.Doc | null;
+  synced?: boolean;
 }
 
 // ---- Helpers ----
@@ -113,9 +116,174 @@ function linesToText(lines: ScriptLineView[]): string {
     .join("\n");
 }
 
+/** Convert plain text to HTML with character name detection (for Y.Text rendering) */
+function textToHtml(text: string): string {
+  if (!text) return "<div><br></div>";
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line) return "<div><br></div>";
+      if (isCharacterName(line)) {
+        const c = escapeHtml(line.trim());
+        return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
+      }
+      return `<div>${escapeHtml(line)}</div>`;
+    })
+    .join("");
+}
+
+/** Extract raw text from contentEditable by walking top-level child nodes */
+function getRawEditorText(el: HTMLDivElement): string {
+  const lines: string[] = [];
+  for (const child of Array.from(el.childNodes)) {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const htmlEl = child as HTMLElement;
+      if (htmlEl.childNodes.length === 1 && htmlEl.firstChild?.nodeName === "BR") {
+        lines.push("");
+      } else if (htmlEl.childNodes.length === 0) {
+        lines.push("");
+      } else {
+        lines.push(htmlEl.textContent ?? "");
+      }
+    } else if (child.nodeType === Node.TEXT_NODE) {
+      lines.push(child.textContent ?? "");
+    }
+  }
+  return lines.join("\n");
+}
+
+/** Compute minimal text diff (common prefix/suffix) for Y.Text operations */
+function computeTextDiff(
+  oldText: string,
+  newText: string
+): { index: number; deleteCount: number; insert: string } {
+  let prefixLen = 0;
+  const minLen = Math.min(oldText.length, newText.length);
+  while (prefixLen < minLen && oldText[prefixLen] === newText[prefixLen]) {
+    prefixLen++;
+  }
+  let oldEnd = oldText.length;
+  let newEnd = newText.length;
+  while (oldEnd > prefixLen && newEnd > prefixLen && oldText[oldEnd - 1] === newText[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+  return {
+    index: prefixLen,
+    deleteCount: oldEnd - prefixLen,
+    insert: newText.slice(prefixLen, newEnd),
+  };
+}
+
+/** Save cursor as div-index + local char offset (survives innerHTML rebuild) */
+function saveDivCursorState(el: HTMLDivElement): { divIndex: number; offset: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return null;
+  const children = Array.from(el.children);
+  for (let i = 0; i < children.length; i++) {
+    if (children[i].contains(sel.anchorNode!)) {
+      const preRange = document.createRange();
+      preRange.selectNodeContents(children[i]);
+      preRange.setEnd(sel.anchorNode!, sel.anchorOffset);
+      return { divIndex: i, offset: preRange.toString().length };
+    }
+  }
+  return null;
+}
+
+/** Restore cursor from div-index + local offset */
+function restoreDivCursorState(el: HTMLDivElement, state: { divIndex: number; offset: number }): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const children = Array.from(el.children);
+  const divIndex = Math.min(state.divIndex, children.length - 1);
+  if (divIndex < 0) return;
+  const div = children[divIndex];
+  const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
+  let currentOffset = 0;
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    if (currentOffset + node.length >= state.offset) {
+      const range = document.createRange();
+      range.setStart(node, Math.min(state.offset - currentOffset, node.length));
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    currentOffset += node.length;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(div);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/** Get cursor position as Y.Text character offset */
+function getCursorTextOffset(el: HTMLDivElement): number | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return null;
+  let textOffset = 0;
+  const children = Array.from(el.children);
+  for (let i = 0; i < children.length; i++) {
+    if (i > 0) textOffset += 1; // \n between divs
+    if (children[i].contains(sel.anchorNode!)) {
+      const preRange = document.createRange();
+      preRange.selectNodeContents(children[i]);
+      preRange.setEnd(sel.anchorNode!, sel.anchorOffset);
+      textOffset += preRange.toString().length;
+      return textOffset;
+    }
+    textOffset += (children[i].textContent || "").length;
+  }
+  return textOffset;
+}
+
+/** Set cursor at a Y.Text character offset */
+function setCursorTextOffset(el: HTMLDivElement, targetOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  let textOffset = 0;
+  const children = Array.from(el.children);
+  for (let i = 0; i < children.length; i++) {
+    if (i > 0) textOffset += 1;
+    const childText = children[i].textContent || "";
+    if (textOffset + childText.length >= targetOffset || i === children.length - 1) {
+      const localOffset = Math.max(0, targetOffset - textOffset);
+      const walker = document.createTreeWalker(children[i], NodeFilter.SHOW_TEXT);
+      let nodeOffset = 0;
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        if (nodeOffset + node.length >= localOffset) {
+          const range = document.createRange();
+          range.setStart(node, Math.min(localOffset - nodeOffset, node.length));
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          return;
+        }
+        nodeOffset += node.length;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(children[i]);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    textOffset += childText.length;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 // ---- Main Component ----
 
-export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }: ScriptViewProps) {
+export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, yDoc, synced: yjsSynced }: ScriptViewProps) {
   const {
     activeRole,
     projectId: storeProjectId,
@@ -189,17 +357,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   const canAddCues = [
     "STAGE_MANAGER", "LIGHTING", "SOUND", "SET_DESIGN", "PROPS", "DIRECTOR", "ACTOR",
   ].includes(activeRole);
-
-  // Broadcast typing for live sync
-  const handleSceneTyping = useCallback(
-    (sceneId: string, value: string) => {
-      const scene = scenes.find((s) => s.id === sceneId);
-      if (!scene || scene.lines.length === 0) return;
-      const lineId = scene.lines[0].id;
-      broadcast?.({ type: "line-typing", lineId, field: "text", value });
-    },
-    [scenes, broadcast]
-  );
 
   const handleTyping = useCallback(
     (lineId: string, field: "text" | "character" | "title", value: string) => {
@@ -315,12 +472,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           setUndoCount(undoStackRef.current.length);
 
           updateLine(sceneId, firstLine.id, { text: content });
-          broadcast?.({
-            type: "line-update",
-            sceneId,
-            lineId: firstLine.id,
-            updates: { text: content },
-          });
+          // Y.Text handles live sync — only broadcast for non-CRDT clients
+          if (!yDoc) {
+            broadcast?.({
+              type: "line-update",
+              sceneId,
+              lineId: firstLine.id,
+              updates: { text: content },
+            });
+          }
 
           // Remove extra lines (consolidate to single line)
           for (const line of scene.lines.slice(1)) {
@@ -463,12 +623,21 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
           text: data.text,
           character: data.character,
         });
-        broadcast?.({
-          type: "line-update",
-          sceneId: action.sceneId,
-          lineId: action.lineId,
-          updates: { text: data.text, character: data.character },
-        });
+        // Update Y.Text so CRDT propagates the undo
+        if (yDoc) {
+          const yText = yDoc.getText(`scene-${action.sceneId}`);
+          yDoc.transact(() => {
+            yText.delete(0, yText.length);
+            if (data.text) yText.insert(0, data.text);
+          }, "undo");
+        } else {
+          broadcast?.({
+            type: "line-update",
+            sceneId: action.sceneId,
+            lineId: action.lineId,
+            updates: { text: data.text, character: data.character },
+          });
+        }
       } catch {}
     } else if (action.type === "edit-title") {
       try {
@@ -482,7 +651,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
         broadcast?.({ type: "scene-title", sceneId: action.sceneId, title: action.prev });
       } catch {}
     }
-  }, [projectId, updateLine, updateSceneTitle, broadcast]);
+  }, [projectId, yDoc, updateLine, updateSceneTitle, broadcast]);
 
   // Ctrl+Z global undo shortcut
   useEffect(() => {
@@ -655,11 +824,12 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
               {/* Single text box for all scene content */}
               <SceneTextBox
                 scene={scene}
+                yDoc={yDoc ?? null}
+                synced={yjsSynced ?? false}
                 canEdit={canWrite}
                 scriptTextSize={scriptTextSize}
                 isMobile={isMobile}
                 onSave={(text) => handleSaveSceneContent(scene.id, text)}
-                onTyping={(val) => handleSceneTyping(scene.id, val)}
                 onFocus={() => handleSceneFocus(scene.id)}
                 onBlur={handleSceneBlur}
                 editorRef={(el) => { sceneEditorRefs.current[scene.id] = el; }}
@@ -761,83 +931,141 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   );
 }
 
-// ---- Scene Text Box (contentEditable) ----
+// ---- Scene Text Box (CRDT-powered contentEditable) ----
 
 function SceneTextBox({
   scene,
+  yDoc,
+  synced,
   canEdit,
   scriptTextSize,
   isMobile,
   onSave,
-  onTyping,
   onFocus,
   onBlur,
   editorRef,
 }: {
   scene: SceneView;
+  yDoc: Y.Doc | null;
+  synced: boolean;
   canEdit: boolean;
   scriptTextSize: number;
   isMobile: boolean;
   onSave: (text: string) => void;
-  onTyping?: (value: string) => void;
   onFocus: () => void;
   onBlur: () => void;
   editorRef: (el: HTMLDivElement | null) => void;
 }) {
   const localRef = useRef<HTMLDivElement | null>(null);
-  const savedTextRef = useRef<string>("");
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTextRef = useRef<string>("");
+  const yTextRef = useRef<Y.Text | null>(null);
+  const initializedRef = useRef(false);
   const isDirtyRef = useRef(false);
-  // Timestamp of our last save — skip DOM overwrites for 3s after to avoid
-  // the store round-trip re-rendering our own content back into the editor.
-  const lastSaveTimeRef = useRef(0);
-
-  const initialHtml = useMemo(() => sceneLinesToHtml(scene.lines) || "<div><br></div>", [scene.lines]);
-  const initialText = useMemo(() => linesToText(scene.lines), [scene.lines]);
 
   // Remote cursor indicators for this scene
   const remoteCursors = useStageStore((s) => s.remoteCursors).filter((c) =>
     scene.lines.some((l) => l.id === c.lineId)
   );
 
-  // Set initial content & sync external updates (not our own saves)
-  useEffect(() => {
-    if (!localRef.current) return;
-    // Never overwrite while user is actively editing
-    if (document.activeElement === localRef.current) return;
-    // Skip DOM overwrite shortly after our own save to prevent
-    // deleted spaces / formatting from being re-injected
-    if (Date.now() - lastSaveTimeRef.current < 3000) return;
-    savedTextRef.current = initialText;
-    localRef.current.innerHTML = initialHtml;
-    isDirtyRef.current = false;
-  }, [initialHtml, initialText]);
+  // DB-based fallback HTML (before Y.Text is ready)
+  const fallbackHtml = useMemo(
+    () => sceneLinesToHtml(scene.lines) || "<div><br></div>",
+    [scene.lines]
+  );
 
+  // Read-only display HTML (updated by Y.Text observer)
+  const [displayHtml, setDisplayHtml] = useState(fallbackHtml);
+
+  // Get Y.Text for this scene
+  const yText = useMemo(
+    () => yDoc?.getText(`scene-${scene.id}`) ?? null,
+    [yDoc, scene.id]
+  );
+  yTextRef.current = yText;
+
+  // Initialize Y.Text from DB + set up observer
   useEffect(() => {
-    return () => {
-      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    if (!yText || !yDoc || !synced) return;
+
+    // Initialize from DB if Y.Text is empty (first user to connect)
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      if (yText.length === 0 && scene.lines.length > 0) {
+        const dbText = normalizeSceneText(linesToText(scene.lines));
+        if (dbText) {
+          yDoc.transact(() => {
+            yText.insert(0, dbText);
+          }, "init");
+        }
+      }
+      // Set initial DOM
+      const text = yText.toString();
+      lastTextRef.current = text;
+      const html = textToHtml(text);
+      setDisplayHtml(html);
+      if (localRef.current && document.activeElement !== localRef.current) {
+        localRef.current.innerHTML = html;
+      }
+    }
+
+    // Observer for remote + programmatic changes (character insert, undo)
+    const observer = (event: Y.YTextEvent, transaction: Y.Transaction) => {
+      // Skip DOM updates for normal typing (DOM already reflects local input)
+      if (transaction.local && transaction.origin === "input") return;
+
+      const newText = yText.toString();
+      lastTextRef.current = newText;
+      const newHtml = textToHtml(newText);
+      setDisplayHtml(newHtml); // For read-only mode
+
+      if (!localRef.current) return;
+
+      // Save cursor position before DOM rebuild
+      const cursorState =
+        document.activeElement === localRef.current
+          ? saveDivCursorState(localRef.current)
+          : null;
+
+      localRef.current.innerHTML = newHtml;
+
+      // Restore cursor
+      if (cursorState) {
+        restoreDivCursorState(localRef.current, cursorState);
+      }
     };
-  }, []);
 
+    yText.observe(observer);
+    return () => yText.unobserve(observer);
+  }, [yText, yDoc, synced, scene.lines]);
+
+  // Handle local input: compute diff and apply to Y.Text
   const handleInput = useCallback(() => {
     isDirtyRef.current = true;
-    if (!localRef.current || !onTyping) return;
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => {
-      if (!localRef.current) return;
-      onTyping(extractEditorText(localRef.current));
-    }, 80);
-  }, [onTyping]);
+    if (!localRef.current || !yTextRef.current || !yDoc) return;
 
+    const newText = getRawEditorText(localRef.current);
+    const oldText = lastTextRef.current;
+    if (newText === oldText) return;
+
+    const diff = computeTextDiff(oldText, newText);
+    yDoc.transact(() => {
+      if (diff.deleteCount > 0) yTextRef.current!.delete(diff.index, diff.deleteCount);
+      if (diff.insert) yTextRef.current!.insert(diff.index, diff.insert);
+    }, "input");
+
+    lastTextRef.current = yTextRef.current.toString();
+  }, [yDoc]);
+
+  // Save Y.Text to DB on blur
   const handleBlur = useCallback(() => {
-    if (!localRef.current) return;
-    const currentText = extractEditorText(localRef.current);
-    // Save if content changed OR if user made any edits (isDirty)
-    if (isDirtyRef.current || currentText !== normalizeSceneText(savedTextRef.current)) {
-      lastSaveTimeRef.current = Date.now();
+    if (isDirtyRef.current) {
       isDirtyRef.current = false;
-      onSave(currentText);
-      savedTextRef.current = currentText;
+      const text = yTextRef.current
+        ? normalizeSceneText(yTextRef.current.toString())
+        : localRef.current
+          ? extractEditorText(localRef.current)
+          : "";
+      if (text) onSave(text);
     }
     onBlur();
   }, [onSave, onBlur]);
@@ -866,7 +1094,7 @@ function SceneTextBox({
             minHeight: 60,
           }}
           dangerouslySetInnerHTML={{
-            __html: initialHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>',
+            __html: displayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>',
           }}
         />
       </div>
@@ -886,7 +1114,15 @@ function SceneTextBox({
           localRef.current = el;
           editorRef(el);
           if (isInit && el) {
-            el.innerHTML = initialHtml;
+            // Set initial content from Y.Text if ready, otherwise from DB
+            if (yText && synced && yText.length > 0) {
+              const text = yText.toString();
+              lastTextRef.current = text;
+              el.innerHTML = textToHtml(text);
+            } else {
+              lastTextRef.current = linesToText(scene.lines);
+              el.innerHTML = fallbackHtml;
+            }
           }
         }}
         contentEditable

@@ -151,7 +151,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
         {showSidePanel && cuePanelSide === "left" && !isMobile && <SidePanel />}
 
         {/* Script panel */}
-        <ScriptView broadcast={broadcast} projectId={params.id} updateCursor={yjs.updateCursor} />
+        <ScriptView broadcast={broadcast} projectId={params.id} updateCursor={yjs.updateCursor} yDoc={yjs.doc} synced={yjs.synced} />
 
         {/* Cue side panel on right (desktop only for side layout) */}
         {showSidePanel && cuePanelSide === "right" && !isMobile && <SidePanel />}

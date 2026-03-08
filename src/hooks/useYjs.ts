@@ -167,6 +167,11 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
     return docRef.current?.getXmlFragment("script") || null;
   }, []);
 
+  // Helper: get or create a Y.Text for a specific scene (CRDT collaborative editing)
+  const getSceneText = useCallback((sceneId: string) => {
+    return docRef.current?.getText(`scene-${sceneId}`) || null;
+  }, []);
+
   // Helper: update cursor position in awareness
   const updateCursor = useCallback(
     (lineId: string | null, field?: "text" | "character" | "title" | null) => {
@@ -185,6 +190,7 @@ export function useYjs({ projectId, userId, userName, userRole }: UseYjsOptions)
     ...state,
     getCuesMap,
     getScriptFragment,
+    getSceneText,
     updateCursor,
   };
 }
