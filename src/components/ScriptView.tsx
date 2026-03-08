@@ -359,6 +359,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     toggleCuePanel,
     isCommentPanelOpen,
     toggleCommentPanel,
+    cuePanelSide,
   } = useStageStore();
 
   const projectId = projectIdProp || storeProjectId;
@@ -824,66 +825,73 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       style={{ padding: isMobile ? "0 8px 80px" : "0 32px 80px" }}
     >
       {/* Panel toggle buttons at top of script area */}
-      {((!roleConfig.hasCuePanel || !isCuePanelOpen) || (activeRole !== "VIEWER" && !isCommentPanelOpen)) && (
-        <div
-          className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5"
-          style={{
-            background: "var(--stage-bg)",
-            borderBottom: "1px solid var(--stage-hover)",
-          }}
-        >
-          {roleConfig.hasCuePanel && !isCuePanelOpen && (
-            <button
-              onClick={toggleCuePanel}
-              style={{
-                height: 32,
-                borderRadius: 6,
-                background: roleConfig.color + "20",
-                border: `1px solid ${roleConfig.color}60`,
-                color: roleConfig.color,
-                fontFamily: "DM Mono, monospace",
-                fontSize: isMobile ? 10 : 11,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 10px",
-                gap: 4,
-                cursor: "pointer",
-              }}
-              title={activeRole === "WRITER" ? "Open Characters & Settings" : activeRole === "PROPS" ? "Open Props List" : "Open Cue Sheet"}
-            >
-              {roleConfig.icon} {isMobile
-                ? (activeRole === "WRITER" ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
-                : (activeRole === "WRITER" ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
-            </button>
-          )}
-          {activeRole !== "VIEWER" && !isCommentPanelOpen && (
-            <button
-              onClick={toggleCommentPanel}
-              style={{
-                height: 32,
-                borderRadius: 6,
-                background: "#47B8E820",
-                border: "1px solid #47B8E860",
-                color: "#47B8E8",
-                fontFamily: "DM Mono, monospace",
-                fontSize: isMobile ? 10 : 11,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 10px",
-                gap: 4,
-                cursor: "pointer",
-              }}
-              title="Open Comments"
-            >
-              {isMobile ? "Comments" : "Comments"}
-            </button>
-          )}
-        </div>
-      )}
+      {((!roleConfig.hasCuePanel || !isCuePanelOpen) || (activeRole !== "VIEWER" && !isCommentPanelOpen)) && (() => {
+        const cueBtnOnLeft = cuePanelSide === "left";
+        const cueBtn = roleConfig.hasCuePanel && !isCuePanelOpen && (
+          <button
+            onClick={toggleCuePanel}
+            style={{
+              height: 32,
+              borderRadius: 6,
+              background: activeRole === "WRITER" ? "var(--stage-gold-bg)" : roleConfig.color + "20",
+              border: activeRole === "WRITER" ? "1px solid var(--stage-gold-border)" : `1px solid ${roleConfig.color}60`,
+              color: activeRole === "WRITER" ? "var(--stage-gold)" : roleConfig.color,
+              fontFamily: "DM Mono, monospace",
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 10px",
+              gap: 4,
+              cursor: "pointer",
+            }}
+            title={activeRole === "WRITER" ? "Open Characters & Settings" : activeRole === "PROPS" ? "Open Props List" : "Open Cue Sheet"}
+          >
+            {roleConfig.icon} {isMobile
+              ? (activeRole === "WRITER" ? "EDIT" : activeRole === "PROPS" ? "PROPS" : "CUE")
+              : (activeRole === "WRITER" ? "Characters & Settings" : activeRole === "PROPS" ? "Props List" : "Cue Sheet")}
+          </button>
+        );
+        const commentBtn = activeRole !== "VIEWER" && !isCommentPanelOpen && (
+          <button
+            onClick={toggleCommentPanel}
+            style={{
+              height: 32,
+              borderRadius: 6,
+              background: "#47B8E820",
+              border: "1px solid #47B8E860",
+              color: "#47B8E8",
+              fontFamily: "DM Mono, monospace",
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 10px",
+              gap: 4,
+              cursor: "pointer",
+            }}
+            title="Open Comments"
+          >
+            Comments
+          </button>
+        );
+        const leftBtn = cueBtnOnLeft ? cueBtn : commentBtn;
+        const rightBtn = cueBtnOnLeft ? commentBtn : cueBtn;
+        return (
+          <div
+            className="sticky top-0 z-10 flex items-center justify-between px-3 py-1.5"
+            style={{
+              background: "var(--stage-bg)",
+              borderBottom: "1px solid var(--stage-hover)",
+            }}
+          >
+            <div>{leftBtn}</div>
+            <div>{rightBtn}</div>
+          </div>
+        );
+      })()}
 
       {/* Sticky toolbar */}
       {canWrite && (
