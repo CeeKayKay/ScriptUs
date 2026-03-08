@@ -945,6 +945,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
                 yDoc={yDoc ?? null}
                 synced={yjsSynced ?? false}
                 canEdit={canWrite}
+                activeRole={activeRole}
+                projectId={projectId || ""}
                 scriptTextSize={scriptTextSize}
                 isMobile={isMobile}
                 onSave={(text) => handleSaveSceneContent(scene.id, text)}
@@ -1056,6 +1058,8 @@ function SceneTextBox({
   yDoc,
   synced,
   canEdit,
+  activeRole,
+  projectId,
   scriptTextSize,
   isMobile,
   onSave,
@@ -1067,6 +1071,8 @@ function SceneTextBox({
   yDoc: Y.Doc | null;
   synced: boolean;
   canEdit: boolean;
+  activeRole: string;
+  projectId: string;
   scriptTextSize: number;
   isMobile: boolean;
   onSave: (text: string) => void;
@@ -1086,11 +1092,89 @@ function SceneTextBox({
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
+  // Selection popup state
+  const [selPopup, setSelPopup] = useState<{ x: number; y: number; text: string } | null>(null);
+  const openCueEditor = useStageStore((s) => s.openCueEditor);
+  const addComment = useStageStore((s) => s.addComment);
+
+  // Determine cue button label based on role
+  const cueButtonLabel = useMemo(() => {
+    if (activeRole === "SET_DESIGN") return "+ Set";
+    if (activeRole === "PROPS") return "+ Prop";
+    const canCue = ["STAGE_MANAGER", "DIRECTOR", "ACTOR", "LIGHTING", "SOUND", "SET_DESIGN", "PROPS"].includes(activeRole);
+    return canCue ? "+ Cue" : null;
+  }, [activeRole]);
+  const canComment = activeRole !== "VIEWER";
+
+  // Track text selection inside editor
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        setSelPopup(null);
+        return;
+      }
+      if (!localRef.current || !localRef.current.contains(sel.anchorNode)) {
+        setSelPopup(null);
+        return;
+      }
+      const text = sel.toString().trim();
+      if (!text) { setSelPopup(null); return; }
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const parentRect = localRef.current.getBoundingClientRect();
+      setSelPopup({
+        x: rect.left - parentRect.left + rect.width / 2,
+        y: rect.top - parentRect.top - 36,
+        text,
+      });
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
+
+  const handleAddCue = useCallback(() => {
+    if (!selPopup) return;
+    const lineId = scene.lines[0]?.id || null;
+    openCueEditor(undefined, lineId || undefined, scene.id, selPopup.text);
+    setSelPopup(null);
+  }, [selPopup, scene.id, scene.lines, openCueEditor]);
+
+  const handleAddComment = useCallback(async () => {
+    if (!selPopup || !projectId) return;
+    const lineId = scene.lines[0]?.id;
+    if (!lineId) return;
+    const commentText = prompt("Add a comment:");
+    if (!commentText?.trim()) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lineId,
+          text: commentText.trim(),
+          scriptRef: selPopup.text,
+          role: activeRole,
+        }),
+      });
+      if (res.ok) {
+        const comment = await res.json();
+        addComment(lineId, comment);
+      }
+    } catch {}
+    setSelPopup(null);
+  }, [selPopup, scene.lines, projectId, activeRole, addComment]);
+
   // Stable ref callback — must be at top level (not in JSX) to avoid hook order issues
   const editorDivRef = useCallback((el: HTMLDivElement | null) => {
     localRef.current = el;
     editorRefProp.current(el);
-    if (el && !domInitializedRef.current) {
+    if (!el) {
+      // Editor unmounted (e.g. switched to read-only role) — reset so next mount re-initializes
+      domInitializedRef.current = false;
+      return;
+    }
+    if (!domInitializedRef.current) {
       domInitializedRef.current = true;
       const yt = yTextRef.current;
       if (yt && yt.length > 0) {
@@ -1285,6 +1369,67 @@ function SceneTextBox({
     document.execCommand("insertText", false, text);
   }, []);
 
+  // Selection popup element (shared between editable and read-only)
+  const selectionPopupEl = selPopup && (cueButtonLabel || canComment) ? (
+    <div
+      data-toolbar
+      style={{
+        position: "absolute",
+        left: selPopup.x,
+        top: selPopup.y,
+        transform: "translateX(-50%)",
+        zIndex: 20,
+        display: "flex",
+        gap: 4,
+        background: "var(--stage-surface)",
+        border: "1px solid var(--stage-border)",
+        borderRadius: 6,
+        padding: "4px 6px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {cueButtonLabel && (
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleAddCue}
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--stage-gold)",
+            background: "#E8C54715",
+            border: "1px solid #E8C54740",
+            borderRadius: 4,
+            padding: "3px 8px",
+            cursor: "pointer",
+          }}
+        >
+          {cueButtonLabel}
+        </button>
+      )}
+      {canComment && (
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleAddComment}
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#47B8E8",
+            background: "#47B8E815",
+            border: "1px solid #47B8E840",
+            borderRadius: 4,
+            padding: "3px 8px",
+            cursor: "pointer",
+          }}
+        >
+          + Comment
+        </button>
+      )}
+    </div>
+  ) : null;
+
   if (!canEdit) {
     return (
       <div style={{ position: "relative" }}>
@@ -1293,7 +1438,9 @@ function SceneTextBox({
             <RemoteCursorIndicator cursors={remoteCursors} />
           </div>
         )}
+        {selectionPopupEl}
         <div
+          ref={(el) => { localRef.current = el; }}
           style={{
             fontFamily: "Libre Baskerville, serif",
             fontSize: scriptTextSize,
@@ -1317,6 +1464,7 @@ function SceneTextBox({
           <RemoteCursorIndicator cursors={remoteCursors} />
         </div>
       )}
+      {selectionPopupEl}
       <div
         ref={editorDivRef}
         contentEditable
@@ -1329,7 +1477,7 @@ function SceneTextBox({
           e.currentTarget.style.background = "var(--stage-line-hover)";
         }}
         onBlur={(e) => {
-          // Don't blur if clicking toolbar
+          // Don't blur if clicking toolbar or selection popup
           const related = e.relatedTarget as HTMLElement | null;
           if (related?.closest("[data-toolbar]")) {
             setTimeout(() => localRef.current?.focus(), 0);
