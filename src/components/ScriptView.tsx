@@ -116,6 +116,20 @@ function linesToText(lines: ScriptLineView[]): string {
     .join("\n");
 }
 
+/** Check if a line starts with a character name prefix followed by dialogue text.
+ *  Returns the character name portion or null. e.g. "JOHN Hello" → "JOHN" */
+function extractCharacterPrefix(line: string): string | null {
+  // Match ALL_CAPS word(s) at start, followed by a space and more text
+  const match = line.match(/^([A-Z][A-Z\s\-'\.]+?)\s{2,}(.+)$/) ||
+                line.match(/^([A-Z][A-Z\-'\.]+)\s(.+)$/);
+  if (!match) return null;
+  const name = match[1].trim();
+  if (name.length === 0 || name.length >= 40) return null;
+  if (["THE END", "BLACKOUT", "LIGHTS UP", "CURTAIN", "INTERMISSION", "PROLOGUE", "EPILOGUE", "ACT", "SCENE"].includes(name)) return null;
+  if (!/^[A-Z][A-Z\s\-'\.]+$/.test(name)) return null;
+  return name;
+}
+
 /** Convert plain text to HTML with character name detection (for Y.Text rendering) */
 function textToHtml(text: string): string {
   if (!text) return "<div><br></div>";
@@ -123,9 +137,17 @@ function textToHtml(text: string): string {
     .split("\n")
     .map((line) => {
       if (!line) return "<div><br></div>";
+      // Full line is a character name (standalone, no dialogue yet)
       if (isCharacterName(line)) {
         const c = escapeHtml(line.trim());
         return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
+      }
+      // Line starts with character name prefix followed by dialogue
+      const charPrefix = extractCharacterPrefix(line);
+      if (charPrefix) {
+        const rest = line.substring(charPrefix.length);
+        const c = escapeHtml(charPrefix);
+        return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
       }
       return `<div>${escapeHtml(line)}</div>`;
     })
@@ -573,8 +595,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
 
       if (isOnEmptyLine) {
         // Cursor is on an empty/blank line — insert character name right here
-        // Replace the empty line content with the character name + new line for dialogue
-        insertText = `${character}\n`;
+        insertText = `${character} `;
         insertAt = lineStart;
         // Delete the empty line's whitespace if any
         const emptyLen = currentLine.length;
@@ -591,7 +612,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       } else {
         // Cursor is in a non-empty line — move to end of current line, add character below
         const endOfLine = lineEnd === -1 ? fullText.length : lineEnd;
-        insertText = `\n${character}\n`;
+        insertText = `\n${character} `;
         insertAt = endOfLine;
         yDoc.transact(() => {
           yText.insert(insertAt, insertText);
@@ -645,18 +666,20 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
 
     const charDiv = document.createElement("div");
     charDiv.setAttribute("data-character", character);
-    charDiv.setAttribute("style", CHAR_NAME_STYLE);
-    charDiv.textContent = character;
-
-    const dialogueDiv = document.createElement("div");
-    dialogueDiv.appendChild(document.createElement("br"));
+    const charSpan = document.createElement("span");
+    charSpan.setAttribute("style", CHAR_NAME_STYLE);
+    charSpan.textContent = character;
+    charDiv.appendChild(charSpan);
+    // Add a space after the character name for dialogue typing
+    const spaceNode = document.createTextNode(" ");
+    charDiv.appendChild(spaceNode);
 
     const refNode = anchorBlock?.nextSibling ?? null;
     editor.insertBefore(charDiv, refNode);
-    editor.insertBefore(dialogueDiv, refNode);
 
+    // Place cursor after the space, ready for dialogue
     const newRange = document.createRange();
-    newRange.selectNodeContents(dialogueDiv);
+    newRange.setStartAfter(spaceNode);
     newRange.collapse(true);
     sel!.removeAllRanges();
     sel!.addRange(newRange);
@@ -1057,6 +1080,29 @@ function SceneTextBox({
   const initializedRef = useRef(false);
   const domInitializedRef = useRef(false);
   const isDirtyRef = useRef(false);
+  // Store latest props in refs for stable ref callback
+  const editorRefProp = useRef(editorRef);
+  editorRefProp.current = editorRef;
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
+
+  // Stable ref callback — must be at top level (not in JSX) to avoid hook order issues
+  const editorDivRef = useCallback((el: HTMLDivElement | null) => {
+    localRef.current = el;
+    editorRefProp.current(el);
+    if (el && !domInitializedRef.current) {
+      domInitializedRef.current = true;
+      const yt = yTextRef.current;
+      if (yt && yt.length > 0) {
+        const text = yt.toString();
+        lastTextRef.current = text;
+        el.innerHTML = textToHtml(text);
+      } else {
+        lastTextRef.current = linesToText(sceneRef.current.lines);
+        el.innerHTML = sceneLinesToHtml(sceneRef.current.lines) || "<div><br></div>";
+      }
+    }
+  }, []);
 
   // Remote cursor indicators for this scene
   const remoteCursors = useStageStore((s) => s.remoteCursors).filter((c) =>
@@ -1130,6 +1176,21 @@ function SceneTextBox({
       const editor = localRef.current;
       const oldChildren = Array.from(editor.children) as HTMLElement[];
 
+      // Helper: build correct innerHTML for a line
+      const buildLineHtml = (line: string): string => {
+        if (!line) return "<br>";
+        if (isCharacterName(line)) {
+          const c = escapeHtml(line.trim());
+          return `<span style="${CHAR_NAME_STYLE}">${c}</span>`;
+        }
+        const charPrefix = extractCharacterPrefix(line);
+        if (charPrefix) {
+          const rest = line.substring(charPrefix.length);
+          return `<span style="${CHAR_NAME_STYLE}">${escapeHtml(charPrefix)}</span>${escapeHtml(rest)}`;
+        }
+        return escapeHtml(line);
+      };
+
       // Reconcile: update changed lines, add/remove as needed
       for (let i = 0; i < Math.max(newLines.length, oldChildren.length); i++) {
         if (i >= newLines.length) {
@@ -1141,64 +1202,42 @@ function SceneTextBox({
         }
 
         const line = newLines[i];
-        const isChar = isCharacterName(line);
         const expectedText = line || "";
 
         if (i < oldChildren.length) {
-          // Update existing child only if content changed
           const oldEl = oldChildren[i];
           const oldText = oldEl.textContent || "";
-          const oldIsChar = oldEl.hasAttribute("data-character");
 
-          if (oldText !== expectedText || oldIsChar !== isChar) {
-            // Check if cursor is inside this child — if so, do a careful update
+          if (oldText !== expectedText) {
+            // Check if cursor is inside this child
             const sel = window.getSelection();
             const cursorInThisChild = sel && sel.rangeCount > 0 && oldEl.contains(sel.anchorNode);
 
-            if (cursorInThisChild) {
-              // Cursor is here — only update attributes/style, leave text alone
-              // unless the text itself was changed by the remote (not just formatting)
-              if (oldText !== expectedText) {
-                // Remote edited this exact line — must update text, cursor will shift
-                if (isChar) {
-                  oldEl.setAttribute("data-character", escapeHtml(expectedText));
-                  oldEl.setAttribute("style", CHAR_NAME_STYLE);
-                } else {
-                  oldEl.removeAttribute("data-character");
-                  oldEl.removeAttribute("style");
-                }
-                oldEl.textContent = expectedText || "";
-                if (!expectedText) oldEl.appendChild(document.createElement("br"));
-              }
-            } else {
-              // Cursor is NOT here — safe to fully replace content
-              if (isChar) {
-                oldEl.setAttribute("data-character", escapeHtml(expectedText));
-                oldEl.setAttribute("style", CHAR_NAME_STYLE);
-                oldEl.textContent = expectedText;
+            if (!cursorInThisChild) {
+              // Safe to fully replace content
+              const charPrefix = extractCharacterPrefix(expectedText);
+              if (isCharacterName(expectedText)) {
+                oldEl.setAttribute("data-character", escapeHtml(expectedText.trim()));
+              } else if (charPrefix) {
+                oldEl.setAttribute("data-character", escapeHtml(charPrefix));
               } else {
                 oldEl.removeAttribute("data-character");
-                oldEl.removeAttribute("style");
-                if (expectedText) {
-                  oldEl.textContent = expectedText;
-                } else {
-                  oldEl.innerHTML = "<br>";
-                }
               }
+              oldEl.removeAttribute("style");
+              oldEl.innerHTML = buildLineHtml(expectedText);
             }
+            // If cursor IS in this child, leave it alone — user is typing here
           }
         } else {
           // Append new child
           const div = document.createElement("div");
-          if (isChar) {
-            div.setAttribute("data-character", escapeHtml(expectedText));
-            div.setAttribute("style", CHAR_NAME_STYLE);
-            div.textContent = expectedText;
-          } else if (expectedText) {
-            div.textContent = expectedText;
-          } else {
-            div.appendChild(document.createElement("br"));
+          const charPrefix = extractCharacterPrefix(expectedText);
+          if (isCharacterName(expectedText)) {
+            div.setAttribute("data-character", escapeHtml(expectedText.trim()));
+          } else if (charPrefix) {
+            div.setAttribute("data-character", escapeHtml(charPrefix));
           }
+          div.innerHTML = buildLineHtml(expectedText);
           editor.appendChild(div);
         }
       }
@@ -1279,22 +1318,7 @@ function SceneTextBox({
         </div>
       )}
       <div
-        ref={useCallback((el: HTMLDivElement | null) => {
-          localRef.current = el;
-          editorRef(el);
-          if (el && !domInitializedRef.current) {
-            domInitializedRef.current = true;
-            // Set initial content from Y.Text if ready, otherwise from DB
-            if (yText && synced && yText.length > 0) {
-              const text = yText.toString();
-              lastTextRef.current = text;
-              el.innerHTML = textToHtml(text);
-            } else {
-              lastTextRef.current = linesToText(scene.lines);
-              el.innerHTML = fallbackHtml;
-            }
-          }
-        }, [])}
+        ref={editorDivRef}
         contentEditable
         suppressContentEditableWarning
         spellCheck

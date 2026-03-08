@@ -421,9 +421,9 @@ export function WriterSidePanel() {
                       onClick={() => { setEditingGroupId(group.id); setEditGroupName(group.name); }}
                       style={{
                         fontFamily: "DM Mono, monospace",
-                        fontSize: fs(0.7),
+                        fontSize: fs(0.8),
                         fontWeight: 600,
-                        color: writerColor,
+                        color: "var(--stage-gold)",
                         letterSpacing: "0.06em",
                         textTransform: "uppercase",
                         cursor: "text",

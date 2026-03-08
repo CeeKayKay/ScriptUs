@@ -14,14 +14,18 @@ export async function sendPasswordResetEmail({
   to,
   resetUrl,
   userName,
+  smtpUser,
+  smtpPass,
 }: {
   to: string;
   resetUrl: string;
   userName: string;
+  smtpUser?: string;
+  smtpPass?: string;
 }) {
-  const transporter = createTransporter();
+  const transporter = createTransporter(smtpUser, smtpPass);
   if (!transporter) throw new Error("No SMTP credentials configured");
-  const fromEmail = process.env.SMTP_USER;
+  const fromEmail = smtpUser || process.env.SMTP_USER;
 
   await transporter.sendMail({
     from: `"ScriptUs" <${fromEmail}>`,

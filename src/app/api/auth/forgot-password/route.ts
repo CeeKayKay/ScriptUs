@@ -37,6 +37,17 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Find SMTP credentials from a project the user belongs to (prefer one with SMTP configured)
+  const memberships = await prisma.projectMember.findMany({
+    where: { userId: user.id },
+    include: { project: { select: { smtpUser: true, smtpPass: true } } },
+  });
+  const withSmtp = memberships.find((m) => m.project.smtpUser && m.project.smtpPass);
+  const membership = withSmtp || memberships[0];
+
+  const smtpUser = membership?.project?.smtpUser || undefined;
+  const smtpPass = membership?.project?.smtpPass || undefined;
+
   // Send the reset email
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
   const resetUrl = `${baseUrl}/reset-password/${token}`;
@@ -46,6 +57,8 @@ export async function POST(req: NextRequest) {
       to: email.trim(),
       resetUrl,
       userName: user.name || "there",
+      smtpUser: smtpUser || undefined,
+      smtpPass: smtpPass || undefined,
     });
   } catch {
     // Don't expose email sending failures
