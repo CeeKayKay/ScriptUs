@@ -161,11 +161,14 @@ function textToHtml(text: string): string {
     .join("");
 }
 
-/** Build annotated line content with cue badges and/or comment underlines */
+/** Build annotated line content with cue badges and/or comment underlines.
+ *  sideBubbleDir: when set, cue labels render as side bubbles connected by a line
+ *  instead of floating badges above text. Used for Lighting, Sound, Stage Manager. */
 function annotateLine(
   plainText: string,
   cues: CueView[],
   selectedCommentRef: string | null,
+  sideBubbleDir: "left" | "right" | null = null,
 ): string {
   type Ann = { start: number; end: number; type: "cue" | "comment"; cue?: CueView; color?: string };
   const anns: Ann[] = [];
@@ -197,10 +200,25 @@ function annotateLine(
     const segText = escapeHtml(plainText.substring(ann.start, ann.end));
     if (ann.type === "cue" && ann.cue) {
       const config = CUE_TYPES[ann.cue.type];
-      result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
-      result += `<span contenteditable="false" style="position:absolute;top:-1.5em;left:0;font-family:DM Mono,monospace;font-size:9px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:3px;padding:0 4px;white-space:nowrap;pointer-events:auto;cursor:pointer;line-height:1.4;" data-cue-id="${ann.cue.id}">${escapeHtml(ann.cue.label)}</span>`;
-      result += segText;
-      result += `</span>`;
+      if (sideBubbleDir) {
+        // Side-bubble mode: label extends to the side with a connecting line
+        const bubbleLabel = escapeHtml(ann.cue.label);
+        const pillStyle = `font-family:DM Mono,monospace;font-size:10px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:10px;padding:1px 7px;white-space:nowrap;line-height:1.4;`;
+        const lineStyle = `display:inline-block;width:24px;height:0;border-top:1.5px solid ${ann.color}60;vertical-align:middle;`;
+        if (sideBubbleDir === "left") {
+          const bubbleHtml = `<span contenteditable="false" style="position:absolute;right:calc(100% + 2px);top:50%;transform:translateY(-50%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;" data-cue-id="${ann.cue.id}"><span style="${pillStyle}">${bubbleLabel}</span><span style="${lineStyle}"></span></span>`;
+          result += `<span style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${bubbleHtml}${segText}</span>`;
+        } else {
+          const bubbleHtml = `<span contenteditable="false" style="position:absolute;left:calc(100% + 2px);top:50%;transform:translateY(-50%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;" data-cue-id="${ann.cue.id}"><span style="${lineStyle}"></span><span style="${pillStyle}">${bubbleLabel}</span></span>`;
+          result += `<span style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${segText}${bubbleHtml}</span>`;
+        }
+      } else {
+        // Default top-badge mode
+        result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
+        result += `<span contenteditable="false" style="position:absolute;top:-1.5em;left:0;font-family:DM Mono,monospace;font-size:9px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:3px;padding:0 4px;white-space:nowrap;pointer-events:auto;cursor:pointer;line-height:1.4;" data-cue-id="${ann.cue.id}">${escapeHtml(ann.cue.label)}</span>`;
+        result += segText;
+        result += `</span>`;
+      }
     } else if (ann.type === "comment") {
       result += `<span style="text-decoration:underline;text-decoration-color:#47B8E8;text-underline-offset:3px;text-decoration-thickness:2px;background:#47B8E810;border-radius:2px;padding:1px 0;">${segText}</span>`;
     }
@@ -216,6 +234,7 @@ function textToDisplayHtml(
   cues: CueView[],
   visibleCueTypes: CueType[],
   selectedCommentRef: string | null,
+  sideBubbleDir: "left" | "right" | null = null,
 ): string {
   if (!text) return "<div><br></div>";
 
@@ -227,9 +246,14 @@ function textToDisplayHtml(
       if (!line) return "<div><br></div>";
 
       // Check for annotations on this line
-      const annotated = annotateLine(line, activeCues, selectedCommentRef);
+      const annotated = annotateLine(line, activeCues, selectedCommentRef, sideBubbleDir);
       const hasCueBadge = activeCues.some((c) => c.scriptRef && line.includes(c.scriptRef));
-      const padStyle = hasCueBadge ? ` style="position:relative;padding-top:1.8em;"` : "";
+      // Top-badge mode needs padding-top; side-bubble mode needs overflow visible
+      const padStyle = hasCueBadge
+        ? (sideBubbleDir
+          ? ` style="position:relative;overflow:visible;"`
+          : ` style="position:relative;padding-top:1.8em;"`)
+        : "";
 
       if (annotated) {
         const charPrefix = extractCharacterPrefix(line);
@@ -237,7 +261,7 @@ function textToDisplayHtml(
           const c = escapeHtml(charPrefix);
           // Re-annotate only the dialogue portion after the prefix
           const dialoguePart = line.substring(charPrefix.length);
-          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef);
+          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir);
           const dialogueHtml = dialogueAnnotated || escapeHtml(dialoguePart);
           return `<div data-character="${c}"${padStyle}><span style="${CHAR_NAME_STYLE}">${c}</span>${dialogueHtml}</div>`;
         }
@@ -476,6 +500,12 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const containerRef = useRef<HTMLDivElement>(null);
   const roleConfig = ROLES[activeRole];
   const isMobile = useIsMobile();
+
+  // Side-bubble cue overlay for Lighting, Sound, Stage Manager
+  const SIDE_BUBBLE_ROLES = ["LIGHTING", "SOUND", "STAGE_MANAGER"];
+  const sideBubbleDir: "left" | "right" | null = SIDE_BUBBLE_ROLES.includes(activeRole)
+    ? (cuePanelSide === "left" ? "left" : "right")
+    : null;
 
   // Scene editor refs for character insertion + live sync
   const sceneEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -969,7 +999,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     <div
       ref={containerRef}
       className="flex-1 overflow-y-auto"
-      style={{ padding: isMobile ? "0 8px 80px" : "0 32px 80px" }}
+      style={{
+        padding: isMobile
+          ? "0 8px 80px"
+          : sideBubbleDir === "left"
+            ? "0 32px 80px 120px"
+            : sideBubbleDir === "right"
+              ? "0 120px 80px 32px"
+              : "0 32px 80px",
+      }}
     >
       {/* Panel toggle buttons at top of script area */}
       {((!roleConfig.hasCuePanel || !isCuePanelOpen) || (activeRole !== "VIEWER" && !isCommentPanelOpen)) && (() => {
@@ -1222,6 +1260,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
                 onFocus={() => handleSceneFocus(scene.id)}
                 onBlur={handleSceneBlur}
                 editorRef={(el) => { sceneEditorRefs.current[scene.id] = el; }}
+                sideBubbleDir={sideBubbleDir}
               />
 
               {/* Add scene between */}
@@ -1335,6 +1374,7 @@ function SceneTextBox({
   onFocus,
   onBlur,
   editorRef,
+  sideBubbleDir,
 }: {
   scene: SceneView;
   yDoc: Y.Doc | null;
@@ -1348,6 +1388,7 @@ function SceneTextBox({
   onFocus: () => void;
   onBlur: () => void;
   editorRef: (el: HTMLDivElement | null) => void;
+  sideBubbleDir: "left" | "right" | null;
 }) {
   const localRef = useRef<HTMLDivElement | null>(null);
   const lastTextRef = useRef<string>("");
@@ -1557,8 +1598,8 @@ function SceneTextBox({
       sceneCues.some((c) => c.scriptRef && visibleTypes.includes(c.type) && text.includes(c.scriptRef)) ||
       (selectedCommentRef && text.includes(selectedCommentRef));
     if (!hasAnnotations) return displayHtml;
-    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef);
-  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig]);
+    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir);
+  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir]);
 
   // Get Y.Text for this scene
   const yText = useMemo(
@@ -1907,7 +1948,7 @@ function SceneTextBox({
 
   if (!canEdit) {
     return (
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", overflow: "visible" }}>
         {remoteCursors.length > 0 && (
           <div style={{ position: "absolute", top: -2, right: 8, zIndex: 5 }}>
             <RemoteCursorIndicator cursors={remoteCursors} />
@@ -1934,6 +1975,7 @@ function SceneTextBox({
             minHeight: 60,
             userSelect: "text",
             cursor: "text",
+            overflow: "visible",
           }}
         />
       </div>
