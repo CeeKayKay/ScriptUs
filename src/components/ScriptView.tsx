@@ -202,23 +202,12 @@ function annotateLine(
       const config = CUE_TYPES[ann.cue.type];
       if (sideBubbleDir) {
         // Side-bubble mode: highlighted text gets underline + background.
-        // Bubble is anchored to the inline span so it aligns vertically
-        // with the highlighted text, with a long connecting line to the margin.
+        // The bubble is positioned by a post-render effect that measures
+        // the highlight's position and places the bubble at a fixed spot
+        // in the margin, with a connecting line of the right length.
         const bubbleLabel = escapeHtml(ann.cue.label);
-        const pillStyle = `font-family:DM Mono,monospace;font-size:20px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:12px;padding:2px 10px;white-space:nowrap;line-height:1.3;`;
-        const lineW = 80; // long enough to reach the margin
-        result += `<span data-cue-highlight="${ann.cue.id}" style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
-        if (sideBubbleDir === "left") {
-          result += `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;bottom:-2px;right:100%;display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
-          result += `<span style="${pillStyle}">${bubbleLabel}</span>`;
-          result += `<span style="display:inline-block;width:${lineW}px;height:0;border-top:2px solid ${ann.color};flex-shrink:0;margin-bottom:0;"></span>`;
-          result += `</span>`;
-        } else {
-          result += `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;bottom:-2px;left:100%;display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
-          result += `<span style="display:inline-block;width:${lineW}px;height:0;border-top:2px solid ${ann.color};flex-shrink:0;margin-bottom:0;"></span>`;
-          result += `<span style="${pillStyle}">${bubbleLabel}</span>`;
-          result += `</span>`;
-        }
+        // Highlighted text with underline — data attributes drive post-render positioning
+        result += `<span data-cue-highlight="${ann.cue.id}" data-bubble-dir="${sideBubbleDir}" data-bubble-color="${ann.color}" data-bubble-label="${bubbleLabel}" data-bubble-type="${ann.cue.type}" style="display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
         result += segText;
         result += `</span>`;
       } else {
@@ -236,6 +225,109 @@ function annotateLine(
   if (pos < plainText.length) result += escapeHtml(plainText.substring(pos));
 
   return result;
+}
+
+/**
+ * Post-render: find highlight spans with data-bubble-dir and create
+ * absolutely-positioned bubble elements on the parent line <div>.
+ * The bubble is pinned at a fixed position in the margin, and a
+ * connecting line stretches from the bubble to the highlight.
+ */
+function positionSideBubbles(container: HTMLElement) {
+  const highlights = container.querySelectorAll<HTMLElement>("span[data-cue-highlight][data-bubble-dir]");
+  if (!highlights.length) return;
+
+  highlights.forEach((hl) => {
+    const dir = hl.getAttribute("data-bubble-dir") as "left" | "right";
+    const color = hl.getAttribute("data-bubble-color") || "#888";
+    const label = hl.getAttribute("data-bubble-label") || "";
+    const cueType = hl.getAttribute("data-bubble-type") || "";
+    const cueId = hl.getAttribute("data-cue-highlight") || "";
+    const config = CUE_TYPES[cueType as keyof typeof CUE_TYPES];
+
+    // Find the parent line <div> (direct child of container)
+    let lineDiv = hl.parentElement;
+    while (lineDiv && lineDiv.parentElement !== container) {
+      lineDiv = lineDiv.parentElement;
+    }
+    if (!lineDiv) return;
+
+    // Ensure the line div is a positioning context
+    lineDiv.style.position = "relative";
+    lineDiv.style.overflow = "visible";
+
+    // Measure highlight position relative to line div
+    const lineDivRect = lineDiv.getBoundingClientRect();
+    const hlRect = hl.getBoundingClientRect();
+
+    // Create the bubble element
+    const bubble = document.createElement("span");
+    bubble.contentEditable = "false";
+    bubble.setAttribute("data-cue-id", cueId);
+    bubble.style.position = "absolute";
+    bubble.style.pointerEvents = "auto";
+    bubble.style.cursor = "pointer";
+    bubble.style.display = "flex";
+    bubble.style.alignItems = "center";
+    bubble.style.whiteSpace = "nowrap";
+    bubble.style.zIndex = "2";
+
+    // Pill element
+    const pill = document.createElement("span");
+    pill.style.fontFamily = "DM Mono, monospace";
+    pill.style.fontSize = "20px";
+    pill.style.fontWeight = "700";
+    pill.style.color = color;
+    pill.style.background = config?.bgColor || color + "15";
+    pill.style.border = `1px solid ${config?.borderColor || color + "30"}`;
+    pill.style.borderRadius = "12px";
+    pill.style.padding = "2px 10px";
+    pill.style.whiteSpace = "nowrap";
+    pill.style.lineHeight = "1.3";
+    pill.textContent = label;
+
+    // Connecting line element
+    const line = document.createElement("span");
+    line.style.display = "inline-block";
+    line.style.height = "0";
+    line.style.borderTop = `2px solid ${color}`;
+    line.style.flexShrink = "0";
+
+    // Position vertically: align with the highlight's baseline (bottom of highlight)
+    const hlBottom = hlRect.bottom - lineDivRect.top;
+    bubble.style.top = `${hlBottom - 2}px`; // -2 to align with the 2px underline
+
+    if (dir === "left") {
+      // Bubble in the left margin: line goes from pill to highlight's left edge
+      const hlLeft = hlRect.left - lineDivRect.left;
+      // Pill goes first (leftmost), then the connecting line
+      bubble.appendChild(pill);
+      bubble.appendChild(line);
+      // Measure pill width after append to position correctly
+      lineDiv.appendChild(bubble);
+      const pillW = pill.getBoundingClientRect().width;
+      const bubbleX = -80; // center of 160px margin
+      bubble.style.right = "auto";
+      bubble.style.left = `${bubbleX - pillW / 2}px`;
+      // Line stretches from pill's right edge to highlight's left edge
+      const lineWidth = hlLeft - (bubbleX + pillW / 2);
+      line.style.width = `${Math.max(0, lineWidth)}px`;
+    } else {
+      // Bubble in the right margin: line goes from highlight's right edge to pill
+      const hlRight = hlRect.right - lineDivRect.left;
+      const lineDivWidth = lineDivRect.width;
+      // Line goes first, then the pill
+      bubble.appendChild(line);
+      bubble.appendChild(pill);
+      lineDiv.appendChild(bubble);
+      const pillW = pill.getBoundingClientRect().width;
+      const bubbleX = lineDivWidth + 80; // center of 160px right margin
+      bubble.style.left = `${hlRight}px`;
+      // Line stretches from highlight's right edge to pill's left edge
+      const lineWidth = bubbleX - pillW / 2 - hlRight;
+      line.style.width = `${Math.max(0, lineWidth)}px`;
+    }
+  });
 }
 
 /** Convert plain text to display HTML with cue badges and comment underlines */
@@ -1954,6 +2046,10 @@ function SceneTextBox({
     localRef.current = el;
     if (el) {
       el.innerHTML = annotatedDisplayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>';
+      // Post-render: create side bubbles at fixed margin positions with
+      // variable-length connecting lines to each highlighted span.
+      // Use rAF so layout measurements are accurate.
+      requestAnimationFrame(() => positionSideBubbles(el));
     }
   }, [annotatedDisplayHtml]);
 

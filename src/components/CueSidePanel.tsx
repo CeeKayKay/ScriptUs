@@ -243,7 +243,7 @@ export function CueSidePanel() {
             }
           : {
               flexShrink: 0,
-              width: 420,
+              width: 320,
               background: "var(--stage-surface)",
               ...(cuePanelSide === "left"
                 ? { borderRight: `1px solid ${roleConfig.color}15` }
