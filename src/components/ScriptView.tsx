@@ -193,6 +193,9 @@ function annotateLine(
 
   anns.sort((a, b) => a.start - b.start);
 
+  // Collect side-bubble data to render at div edge after the text
+  const sideBubbles: { id: string; pillStyle: string; bubbleLabel: string; color: string }[] = [];
+
   let result = "";
   let pos = 0;
   for (const ann of anns) {
@@ -201,26 +204,13 @@ function annotateLine(
     if (ann.type === "cue" && ann.cue) {
       const config = CUE_TYPES[ann.cue.type];
       if (sideBubbleDir) {
-        // Side-bubble mode: highlighted text gets underline + background;
-        // bubble + connecting line anchored to the inline span, aligned to underline
-        result += `<span style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid #47B8E8;padding:1px 0;border-radius:2px;">`;
+        // Side-bubble mode: highlighted text gets underline + background only
+        result += `<span data-cue-highlight="${ann.cue.id}" style="background:${ann.color}15;border-bottom:2px solid #47B8E8;padding:1px 0;border-radius:2px;">${segText}</span>`;
 
+        // Bubble is collected and rendered at the div edge (appended after text)
         const bubbleLabel = escapeHtml(ann.cue.label);
         const pillStyle = `font-family:DM Mono,monospace;font-size:20px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:12px;padding:2px 10px;white-space:nowrap;line-height:1.3;`;
-        // Blue connecting line aligned to underline level (bottom of span)
-        if (sideBubbleDir === "left") {
-          result += `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;bottom:-2px;right:100%;display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;padding-right:0;">`;
-          result += `<span style="${pillStyle}">${bubbleLabel}</span>`;
-          result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;margin-bottom:0;"></span>`;
-          result += `</span>`;
-        } else {
-          result += `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;bottom:-2px;left:100%;display:flex;align-items:flex-end;white-space:nowrap;pointer-events:auto;cursor:pointer;padding-left:0;">`;
-          result += `<span style="display:inline-block;width:40px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;margin-bottom:0;"></span>`;
-          result += `<span style="${pillStyle}">${bubbleLabel}</span>`;
-          result += `</span>`;
-        }
-        result += segText;
-        result += `</span>`;
+        sideBubbles.push({ id: ann.cue.id, pillStyle, bubbleLabel, color: ann.color || "#888" });
       } else {
         // Default top-badge mode
         result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
@@ -234,6 +224,26 @@ function annotateLine(
     pos = ann.end;
   }
   if (pos < plainText.length) result += escapeHtml(plainText.substring(pos));
+
+  // Append side-bubble elements positioned at the div edge
+  // The connecting line spans from the div edge toward the text;
+  // the underline on the highlighted text completes the visual connection
+  for (let i = 0; i < sideBubbles.length; i++) {
+    const sb = sideBubbles[i];
+    const topOffset = i * 28;
+    if (sideBubbleDir === "left") {
+      result += `<span contenteditable="false" data-cue-id="${sb.id}" style="position:absolute;left:0;top:${topOffset}px;transform:translateX(-100%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
+      result += `<span style="${sb.pillStyle}">${sb.bubbleLabel}</span>`;
+      result += `<span style="display:inline-block;width:12px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;"></span>`;
+      result += `</span>`;
+    } else {
+      result += `<span contenteditable="false" data-cue-id="${sb.id}" style="position:absolute;right:0;top:${topOffset}px;transform:translateX(100%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;">`;
+      result += `<span style="display:inline-block;width:12px;height:0;border-top:2px solid #47B8E8;flex-shrink:0;"></span>`;
+      result += `<span style="${sb.pillStyle}">${sb.bubbleLabel}</span>`;
+      result += `</span>`;
+    }
+  }
+
   return result;
 }
 
