@@ -162,8 +162,8 @@ function textToHtml(text: string): string {
 }
 
 /** Build annotated line content with cue badges and/or comment underlines.
- *  sideBubbleDir: when set, cue labels render as side bubbles connected by a line
- *  instead of floating badges above text. Used for Lighting, Sound, Stage Manager. */
+ *  sideBubbleDir: when set, cue labels render as side bubbles anchored to the
+ *  line div edge with a connecting line, instead of floating badges above text. */
 function annotateLine(
   plainText: string,
   cues: CueView[],
@@ -193,6 +193,11 @@ function annotateLine(
 
   anns.sort((a, b) => a.start - b.start);
 
+  // Collect side-bubble elements to append after the text content
+  // They'll be absolutely positioned relative to the parent div
+  const sideBubbles: string[] = [];
+  let cueBubbleIndex = 0;
+
   let result = "";
   let pos = 0;
   for (const ann of anns) {
@@ -201,17 +206,31 @@ function annotateLine(
     if (ann.type === "cue" && ann.cue) {
       const config = CUE_TYPES[ann.cue.type];
       if (sideBubbleDir) {
-        // Side-bubble mode: label extends to the side with a connecting line
+        // Side-bubble mode: inline span just gets underline + background highlight
+        result += `<span style="background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${segText}</span>`;
+
+        // Bubble element: positioned at edge of parent div, not the inline span
         const bubbleLabel = escapeHtml(ann.cue.label);
         const pillStyle = `font-family:DM Mono,monospace;font-size:10px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:10px;padding:1px 7px;white-space:nowrap;line-height:1.4;`;
-        const lineStyle = `display:inline-block;width:24px;height:0;border-top:1.5px solid ${ann.color}60;vertical-align:middle;`;
+        const lineColor = `${ann.color}60`;
+        // Stack multiple cues vertically using top offset
+        const topOffset = cueBubbleIndex * 22;
         if (sideBubbleDir === "left") {
-          const bubbleHtml = `<span contenteditable="false" style="position:absolute;right:calc(100% + 2px);top:50%;transform:translateY(-50%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;" data-cue-id="${ann.cue.id}"><span style="${pillStyle}">${bubbleLabel}</span><span style="${lineStyle}"></span></span>`;
-          result += `<span style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${bubbleHtml}${segText}</span>`;
+          sideBubbles.push(
+            `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;right:100%;top:${topOffset}px;height:100%;display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;padding-right:4px;">` +
+            `<span style="${pillStyle}">${bubbleLabel}</span>` +
+            `<span style="display:inline-block;width:16px;height:0;border-top:1.5px solid ${lineColor};vertical-align:middle;flex-shrink:0;"></span>` +
+            `</span>`
+          );
         } else {
-          const bubbleHtml = `<span contenteditable="false" style="position:absolute;left:calc(100% + 2px);top:50%;transform:translateY(-50%);display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;" data-cue-id="${ann.cue.id}"><span style="${lineStyle}"></span><span style="${pillStyle}">${bubbleLabel}</span></span>`;
-          result += `<span style="position:relative;display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">${segText}${bubbleHtml}</span>`;
+          sideBubbles.push(
+            `<span contenteditable="false" data-cue-id="${ann.cue.id}" style="position:absolute;left:100%;top:${topOffset}px;height:100%;display:flex;align-items:center;white-space:nowrap;pointer-events:auto;cursor:pointer;padding-left:4px;">` +
+            `<span style="display:inline-block;width:16px;height:0;border-top:1.5px solid ${lineColor};vertical-align:middle;flex-shrink:0;"></span>` +
+            `<span style="${pillStyle}">${bubbleLabel}</span>` +
+            `</span>`
+          );
         }
+        cueBubbleIndex++;
       } else {
         // Default top-badge mode
         result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
@@ -225,6 +244,12 @@ function annotateLine(
     pos = ann.end;
   }
   if (pos < plainText.length) result += escapeHtml(plainText.substring(pos));
+
+  // Append side bubbles (they're absolutely positioned relative to the parent div)
+  if (sideBubbles.length > 0) {
+    result += sideBubbles.join("");
+  }
+
   return result;
 }
 
