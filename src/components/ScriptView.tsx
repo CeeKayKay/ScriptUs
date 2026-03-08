@@ -36,7 +36,7 @@ function isCharacterName(line: string): boolean {
 }
 
 const CHAR_NAME_STYLE =
-  "font-family:DM Mono,monospace;font-weight:700;color:var(--stage-gold);letter-spacing:0.05em;padding-top:0.5em;";
+  "font-family:DM Mono,monospace;font-weight:700;color:var(--stage-gold);letter-spacing:0.05em;margin-top:0.3em;";
 
 function sceneLinesToHtml(lines: ScriptLineView[]): string {
   if (lines.length === 0) return "";
@@ -61,11 +61,12 @@ function sceneLinesToHtml(lines: ScriptLineView[]): string {
   }
 
   // Single text blob — detect character names by ALL_CAPS heuristic
+  // Skip empty lines to avoid persistent spacing gaps
   const text = lines[0].text || "";
   return text
     .split("\n")
+    .filter((line) => line.trim() !== "")
     .map((line) => {
-      if (!line.trim()) return "<div><br></div>";
       if (isCharacterName(line)) {
         const c = escapeHtml(line.trim());
         return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
@@ -85,7 +86,7 @@ function linesToText(lines: ScriptLineView[]): string {
       }
       return line.text;
     })
-    .join("\n\n");
+    .join("\n");
 }
 
 // ---- Main Component ----
@@ -117,6 +118,25 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
   // Scene editor refs for character insertion + live sync
   const sceneEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastFocusedSceneRef = useRef<string | null>(null);
+  // Track last cursor position so character insertion works after editor blur
+  const lastEditorRangeRef = useRef<{ sceneId: string; range: Range } | null>(null);
+
+  // Save cursor position whenever selection changes inside a scene editor
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      for (const [sceneId, editor] of Object.entries(sceneEditorRefs.current)) {
+        if (editor && editor.contains(range.commonAncestorContainer)) {
+          lastEditorRangeRef.current = { sceneId, range: range.cloneRange() };
+          break;
+        }
+      }
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
 
   // --- Add scene state ---
   const [showAddScene, setShowAddScene] = useState(false);
@@ -312,21 +332,53 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
 
     editor.focus();
 
-    // Ensure we have a selection in this editor
+    // Restore saved cursor position (clicking the character button blurs the editor)
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-      // Place cursor at end
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      sel?.removeAllRanges();
-      sel?.addRange(range);
+    if (sel) {
+      const saved = lastEditorRangeRef.current;
+      if (saved && saved.sceneId === targetSceneId && editor.contains(saved.range.commonAncestorContainer)) {
+        sel.removeAllRanges();
+        sel.addRange(saved.range);
+      } else if (sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
+        // Fallback: place cursor at end
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
-    // Insert character name as styled block + empty line for dialogue
-    const charHtml = `<div data-character="${character}" style="${CHAR_NAME_STYLE}">${character}</div><div><br></div>`;
-    document.execCommand("insertHTML", false, charHtml);
-    // Dispatch input event to ensure dirty flag is set (execCommand behavior varies)
+    // Build the character name element and dialogue line
+    const charDiv = document.createElement("div");
+    charDiv.setAttribute("data-character", character);
+    charDiv.setAttribute("style", CHAR_NAME_STYLE);
+    charDiv.textContent = character;
+
+    const dialogueDiv = document.createElement("div");
+    dialogueDiv.appendChild(document.createElement("br"));
+
+    // Insert at cursor using Range API
+    const range = sel?.getRangeAt(0);
+    if (!range) return;
+
+    // If cursor is inside a text node, split at cursor and insert after
+    range.deleteContents();
+
+    // Insert dialogue line first, then character name before it (insertNode prepends)
+    const frag = document.createDocumentFragment();
+    frag.appendChild(charDiv);
+    frag.appendChild(dialogueDiv);
+    range.insertNode(frag);
+
+    // Place cursor inside the dialogue div so user can type immediately
+    const newRange = document.createRange();
+    newRange.selectNodeContents(dialogueDiv);
+    newRange.collapse(true);
+    sel!.removeAllRanges();
+    sel!.addRange(newRange);
+
+    // Trigger input event so typing broadcast fires
     editor.dispatchEvent(new Event("input", { bubbles: true }));
   }, [pendingDialogue, scenes, setPendingDialogue]);
 
@@ -708,8 +760,10 @@ function SceneTextBox({
   const localRef = useRef<HTMLDivElement | null>(null);
   const savedTextRef = useRef<string>("");
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selfSaveRef = useRef(false);
   const isDirtyRef = useRef(false);
+  // Timestamp of our last save — skip DOM overwrites for 3s after to avoid
+  // the store round-trip re-rendering our own content back into the editor.
+  const lastSaveTimeRef = useRef(0);
 
   const initialHtml = useMemo(() => sceneLinesToHtml(scene.lines) || "<div><br></div>", [scene.lines]);
   const initialText = useMemo(() => linesToText(scene.lines), [scene.lines]);
@@ -719,15 +773,13 @@ function SceneTextBox({
     scene.lines.some((l) => l.id === c.lineId)
   );
 
-  // Set initial content & sync external updates
+  // Set initial content & sync external updates (not our own saves)
   useEffect(() => {
     savedTextRef.current = initialText;
     if (localRef.current && document.activeElement !== localRef.current) {
-      if (selfSaveRef.current) {
-        selfSaveRef.current = false;
-        isDirtyRef.current = false;
-        return; // Skip DOM update after our own save
-      }
+      // Skip DOM overwrite shortly after our own save to prevent
+      // deleted spaces / formatting from being re-injected
+      if (Date.now() - lastSaveTimeRef.current < 3000) return;
       localRef.current.innerHTML = initialHtml;
       isDirtyRef.current = false;
     }
@@ -754,7 +806,7 @@ function SceneTextBox({
     const currentText = localRef.current.innerText?.trim() || "";
     // Save if content changed OR if user made any edits (isDirty)
     if (isDirtyRef.current || currentText !== savedTextRef.current.trim()) {
-      selfSaveRef.current = true;
+      lastSaveTimeRef.current = Date.now();
       isDirtyRef.current = false;
       onSave(currentText);
       savedTextRef.current = currentText;
