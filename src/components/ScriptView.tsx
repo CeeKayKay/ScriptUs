@@ -326,6 +326,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     // Insert character name as styled block + empty line for dialogue
     const charHtml = `<div data-character="${character}" style="${CHAR_NAME_STYLE}">${character}</div><div><br></div>`;
     document.execCommand("insertHTML", false, charHtml);
+    // Dispatch input event to ensure dirty flag is set (execCommand behavior varies)
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
   }, [pendingDialogue, scenes, setPendingDialogue]);
 
   const handleEditSceneTitle = useCallback(
@@ -707,6 +709,7 @@ function SceneTextBox({
   const savedTextRef = useRef<string>("");
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selfSaveRef = useRef(false);
+  const isDirtyRef = useRef(false);
 
   const initialHtml = useMemo(() => sceneLinesToHtml(scene.lines) || "<div><br></div>", [scene.lines]);
   const initialText = useMemo(() => linesToText(scene.lines), [scene.lines]);
@@ -722,9 +725,11 @@ function SceneTextBox({
     if (localRef.current && document.activeElement !== localRef.current) {
       if (selfSaveRef.current) {
         selfSaveRef.current = false;
+        isDirtyRef.current = false;
         return; // Skip DOM update after our own save
       }
       localRef.current.innerHTML = initialHtml;
+      isDirtyRef.current = false;
     }
   }, [initialHtml, initialText]);
 
@@ -735,6 +740,7 @@ function SceneTextBox({
   }, []);
 
   const handleInput = useCallback(() => {
+    isDirtyRef.current = true;
     if (!localRef.current || !onTyping) return;
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => {
@@ -746,8 +752,10 @@ function SceneTextBox({
   const handleBlur = useCallback(() => {
     if (!localRef.current) return;
     const currentText = localRef.current.innerText?.trim() || "";
-    if (currentText !== savedTextRef.current.trim()) {
+    // Save if content changed OR if user made any edits (isDirty)
+    if (isDirtyRef.current || currentText !== savedTextRef.current.trim()) {
       selfSaveRef.current = true;
+      isDirtyRef.current = false;
       onSave(currentText);
       savedTextRef.current = currentText;
     }
