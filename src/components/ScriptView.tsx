@@ -1655,14 +1655,15 @@ function SceneTextBox({
 
     // Observer for remote + programmatic changes (character insert, undo)
     const observer = (event: Y.YTextEvent, transaction: Y.Transaction) => {
-      // Skip DOM updates for normal typing (DOM already reflects local input)
-      if (transaction.local && transaction.origin === "input") return;
-
       const newText = yText.toString();
       lastTextRef.current = newText;
+      // Always keep display state in sync (read-only views depend on this)
       setRawText(newText);
       const newHtml = textToHtml(newText);
-      setDisplayHtml(newHtml); // For read-only mode
+      setDisplayHtml(newHtml);
+
+      // Skip DOM updates for normal typing (DOM already reflects local input)
+      if (transaction.local && transaction.origin === "input") return;
 
       if (!localRef.current) return;
 
