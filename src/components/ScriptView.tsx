@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import * as Y from "yjs";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
-import { CUE_TYPES } from "@/lib/cue-types";
+import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
 import type { CueView, ScriptLineView, LineType, SceneView, CueType } from "@/types";
@@ -169,6 +169,7 @@ function annotateLine(
   cues: CueView[],
   selectedCommentRef: string | null,
   sideBubbleDir: "left" | "right" | null = null,
+  effectiveCueTypes: Record<string, { color: string; bgColor: string; borderColor: string }> = CUE_TYPES,
 ): string {
   type Ann = { start: number; end: number; type: "cue" | "comment"; cue?: CueView; color?: string };
   const anns: Ann[] = [];
@@ -177,7 +178,7 @@ function annotateLine(
     if (!cue.scriptRef) continue;
     const idx = plainText.indexOf(cue.scriptRef);
     if (idx !== -1) {
-      const config = CUE_TYPES[cue.type];
+      const config = effectiveCueTypes[cue.type] || CUE_TYPES[cue.type];
       anns.push({ start: idx, end: idx + cue.scriptRef.length, type: "cue", cue, color: config?.color || "#888" });
     }
   }
@@ -199,7 +200,7 @@ function annotateLine(
     if (ann.start > pos) result += escapeHtml(plainText.substring(pos, ann.start));
     const segText = escapeHtml(plainText.substring(ann.start, ann.end));
     if (ann.type === "cue" && ann.cue) {
-      const config = CUE_TYPES[ann.cue.type];
+      const config = effectiveCueTypes[ann.cue.type] || CUE_TYPES[ann.cue.type];
       if (sideBubbleDir) {
         // Side-bubble mode: highlighted text gets underline + background.
         // The bubble is positioned by a post-render effect that measures
@@ -233,9 +234,12 @@ function annotateLine(
  * The bubble is pinned at a fixed position in the margin, and a
  * connecting line stretches from the bubble to the highlight.
  */
-function positionSideBubbles(container: HTMLElement) {
+function positionSideBubbles(container: HTMLElement, effectiveCueTypes: Record<string, { color: string; bgColor: string; borderColor: string }> = CUE_TYPES) {
   const highlights = container.querySelectorAll<HTMLElement>("span[data-cue-highlight][data-bubble-dir]");
   if (!highlights.length) return;
+
+  // Track occupied vertical ranges per line div to prevent overlap
+  const occupiedRanges = new Map<HTMLElement, Array<{ top: number; bottom: number }>>();
 
   highlights.forEach((hl) => {
     const dir = hl.getAttribute("data-bubble-dir") as "left" | "right";
@@ -243,7 +247,7 @@ function positionSideBubbles(container: HTMLElement) {
     const label = hl.getAttribute("data-bubble-label") || "";
     const cueType = hl.getAttribute("data-bubble-type") || "";
     const cueId = hl.getAttribute("data-cue-highlight") || "";
-    const config = CUE_TYPES[cueType as keyof typeof CUE_TYPES];
+    const config = effectiveCueTypes[cueType] || CUE_TYPES[cueType as keyof typeof CUE_TYPES];
 
     // Find the parent line <div> (direct child of container)
     let lineDiv = hl.parentElement;
@@ -268,7 +272,6 @@ function positionSideBubbles(container: HTMLElement) {
     bubble.style.pointerEvents = "auto";
     bubble.style.cursor = "pointer";
     bubble.style.display = "flex";
-    // flex-end so the connecting line aligns with the bottom (underline level)
     bubble.style.alignItems = "flex-end";
     bubble.style.whiteSpace = "nowrap";
     bubble.style.zIndex = "2";
@@ -294,40 +297,48 @@ function positionSideBubbles(container: HTMLElement) {
     line.style.borderTop = `2px solid ${color}`;
     line.style.flexShrink = "0";
 
-    // Position vertically: align bubble text with the highlight text.
-    // The bubble top matches the highlight top so text sits at the same level.
-    // With flex-end, the connecting line drops to the bottom of the bubble,
-    // matching the underline position of the highlighted text.
+    // Position vertically: align with the highlight text
     const hlTop = hlRect.top - lineDivRect.top;
-    bubble.style.top = `${hlTop}px`;
+    const bubbleHeight = 30; // approximate pill height
+
+    // Check for overlap with existing bubbles on this line div
+    if (!occupiedRanges.has(lineDiv)) occupiedRanges.set(lineDiv, []);
+    const ranges = occupiedRanges.get(lineDiv)!;
+    let finalTop = hlTop;
+    // Shift down until no overlap
+    let attempts = 0;
+    while (attempts < 10) {
+      const overlaps = ranges.some(
+        (r) => finalTop < r.bottom && finalTop + bubbleHeight > r.top
+      );
+      if (!overlaps) break;
+      finalTop += bubbleHeight + 4; // 4px gap between stacked bubbles
+      attempts++;
+    }
+    ranges.push({ top: finalTop, bottom: finalTop + bubbleHeight });
+
+    bubble.style.top = `${finalTop}px`;
 
     if (dir === "left") {
-      // Bubble in the left margin: line goes from pill to highlight's left edge
       const hlLeft = hlRect.left - lineDivRect.left;
-      // Pill goes first (leftmost), then the connecting line
       bubble.appendChild(pill);
       bubble.appendChild(line);
-      // Measure pill width after append to position correctly
       lineDiv.appendChild(bubble);
       const pillW = pill.getBoundingClientRect().width;
-      const bubbleX = -80; // center of 160px margin
+      const bubbleX = -80;
       bubble.style.right = "auto";
       bubble.style.left = `${bubbleX - pillW / 2}px`;
-      // Line stretches from pill's right edge to highlight's left edge
       const lineWidth = hlLeft - (bubbleX + pillW / 2);
       line.style.width = `${Math.max(0, lineWidth)}px`;
     } else {
-      // Bubble in the right margin: line goes from highlight's right edge to pill
       const hlRight = hlRect.right - lineDivRect.left;
       const lineDivWidth = lineDivRect.width;
-      // Line goes first, then the pill
       bubble.appendChild(line);
       bubble.appendChild(pill);
       lineDiv.appendChild(bubble);
       const pillW = pill.getBoundingClientRect().width;
-      const bubbleX = lineDivWidth + 80; // center of 160px right margin
+      const bubbleX = lineDivWidth + 80;
       bubble.style.left = `${hlRight}px`;
-      // Line stretches from highlight's right edge to pill's left edge
       const lineWidth = bubbleX - pillW / 2 - hlRight;
       line.style.width = `${Math.max(0, lineWidth)}px`;
     }
@@ -341,6 +352,7 @@ function textToDisplayHtml(
   visibleCueTypes: CueType[],
   selectedCommentRef: string | null,
   sideBubbleDir: "left" | "right" | null = null,
+  effectiveCueTypes: Record<string, { color: string; bgColor: string; borderColor: string }> = CUE_TYPES,
 ): string {
   if (!text) return "<div><br></div>";
 
@@ -352,7 +364,7 @@ function textToDisplayHtml(
       if (!line) return "<div><br></div>";
 
       // Check for annotations on this line
-      const annotated = annotateLine(line, activeCues, selectedCommentRef, sideBubbleDir);
+      const annotated = annotateLine(line, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes);
       const hasCueBadge = activeCues.some((c) => c.scriptRef && line.includes(c.scriptRef));
       // Top-badge mode needs padding-top; side-bubble mode needs overflow visible
       const padStyle = hasCueBadge
@@ -367,7 +379,7 @@ function textToDisplayHtml(
           const c = escapeHtml(charPrefix);
           // Re-annotate only the dialogue portion after the prefix
           const dialoguePart = line.substring(charPrefix.length);
-          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir);
+          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes);
           const dialogueHtml = dialogueAnnotated || escapeHtml(dialoguePart);
           return `<div data-character="${c}"${padStyle}><span style="${CHAR_NAME_STYLE}">${c}</span>${dialogueHtml}</div>`;
         }
@@ -1516,6 +1528,12 @@ function SceneTextBox({
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const openCueEditor = useStageStore((s) => s.openCueEditor);
   const addComment = useStageStore((s) => s.addComment);
+  const cueTypeColorOverrides = useStageStore((s) => s.cueTypeColorOverrides);
+  const cueTypeColorOverridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
+  const effCueTypes = useMemo(() => {
+    const t = getCurrentTheme();
+    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
 
   // Determine cue button label based on role
   const cueButtonLabel = useMemo(() => {
@@ -1704,8 +1722,8 @@ function SceneTextBox({
       sceneCues.some((c) => c.scriptRef && visibleTypes.includes(c.type) && text.includes(c.scriptRef)) ||
       (selectedCommentRef && text.includes(selectedCommentRef));
     if (!hasAnnotations) return displayHtml;
-    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir);
-  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir]);
+    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir, effCueTypes);
+  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir, effCueTypes]);
 
   // Get Y.Text for this scene
   const yText = useMemo(
@@ -2053,9 +2071,9 @@ function SceneTextBox({
       // Post-render: create side bubbles at fixed margin positions with
       // variable-length connecting lines to each highlighted span.
       // Use rAF so layout measurements are accurate.
-      requestAnimationFrame(() => positionSideBubbles(el));
+      requestAnimationFrame(() => positionSideBubbles(el, effCueTypes));
     }
-  }, [annotatedDisplayHtml]);
+  }, [annotatedDisplayHtml, effCueTypes]);
 
   if (!canEdit) {
     return (

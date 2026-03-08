@@ -1,8 +1,8 @@
 "use client";
 
-import { forwardRef, useRef, useCallback, useState, useEffect } from "react";
+import { forwardRef, useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { CueBadge } from "./CueBadge";
-import { CUE_TYPES } from "@/lib/cue-types";
+import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useStageStore } from "@/lib/store";
 import type { ScriptLineView, CueType, CueView, CommentView, LineType, ProjectRole } from "@/types";
@@ -36,7 +36,7 @@ interface CueSegment {
   color: string | null;
 }
 
-function buildCueSegments(text: string, cues: CueView[]): CueSegment[] {
+function buildCueSegments(text: string, cues: CueView[], effectiveCueTypes: Record<string, { color: string }> = CUE_TYPES): CueSegment[] {
   // Build a list of highlight regions from cues with scriptRef
   const regions: { start: number; end: number; cue: CueView; color: string }[] = [];
 
@@ -44,7 +44,7 @@ function buildCueSegments(text: string, cues: CueView[]): CueSegment[] {
     if (!cue.scriptRef) continue;
     const idx = text.indexOf(cue.scriptRef);
     if (idx === -1) continue;
-    const config = CUE_TYPES[cue.type];
+    const config = effectiveCueTypes[cue.type] || CUE_TYPES[cue.type];
     if (!config) continue;
     regions.push({ start: idx, end: idx + cue.scriptRef.length, cue, color: config.color });
   }
@@ -430,7 +430,13 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
     );
     const hasActiveCue = relevantCues.some((c) => c.id === activeCueId);
     const activeCue = relevantCues.find((c) => c.id === activeCueId);
-    const activeCueConfig = activeCue ? CUE_TYPES[activeCue.type] : null;
+    const overrides = useStageStore((s) => s.cueTypeColorOverrides);
+    const overridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
+    const effCueTypes = useMemo(() => {
+      const t = getCurrentTheme();
+      return getEffectiveCueTypes(t === "light" ? overridesLight : overrides);
+    }, [overrides, overridesLight]);
+    const activeCueConfig = activeCue ? (effCueTypes[activeCue.type] || CUE_TYPES[activeCue.type]) : null;
     const isMobile = useIsMobile();
     const remoteCursors = useStageStore((s) => s.remoteCursors).filter(
       (c) => c.lineId === line.id

@@ -84,6 +84,8 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
           members: data.members,
           customRoles: data.customRoles || [],
           customCueTypes: data.customCueTypes || [],
+          cueTypeColors: data.cueTypeColors || null,
+          cueTypeColorsLight: data.cueTypeColorsLight || null,
         });
         setMyRoles(data.myRoles || [data.myRole] || ["VIEWER"]);
         setLoading(false);

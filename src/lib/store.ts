@@ -15,6 +15,12 @@ interface StageStore {
   members: MemberView[];
   customRoles: CustomRoleView[];
   customCueTypes: CustomCueTypeView[];
+  // Per-project color overrides for built-in cue types (per theme)
+  cueTypeColorOverrides: Record<string, string>;      // dark theme
+  cueTypeColorOverridesLight: Record<string, string>;  // light theme
+  setCueTypeColorOverrides: (overrides: Record<string, string>) => void;
+  setCueTypeColorOverridesLight: (overrides: Record<string, string>) => void;
+  setCueTypeColorOverride: (cueType: string, color: string, theme: "dark" | "light") => void;
   setProject: (data: {
     id: string;
     title: string;
@@ -22,6 +28,8 @@ interface StageStore {
     members: MemberView[];
     customRoles?: CustomRoleView[];
     customCueTypes?: CustomCueTypeView[];
+    cueTypeColors?: Record<string, string> | null;
+    cueTypeColorsLight?: Record<string, string> | null;
   }) => void;
 
   // UI state
@@ -178,7 +186,16 @@ export const useStageStore = create<StageStore>((set) => ({
   members: [],
   customRoles: [],
   customCueTypes: [],
-  setProject: ({ id, title, scenes, members, customRoles, customCueTypes }) =>
+  cueTypeColorOverrides: {},
+  cueTypeColorOverridesLight: {},
+  setCueTypeColorOverrides: (overrides) => set({ cueTypeColorOverrides: overrides }),
+  setCueTypeColorOverridesLight: (overrides) => set({ cueTypeColorOverridesLight: overrides }),
+  setCueTypeColorOverride: (cueType, color, theme) =>
+    set((s) => theme === "light"
+      ? { cueTypeColorOverridesLight: { ...s.cueTypeColorOverridesLight, [cueType]: color } }
+      : { cueTypeColorOverrides: { ...s.cueTypeColorOverrides, [cueType]: color } }
+    ),
+  setProject: ({ id, title, scenes, members, customRoles, customCueTypes, cueTypeColors, cueTypeColorsLight }) =>
     set({
       projectId: id,
       projectTitle: title,
@@ -186,6 +203,8 @@ export const useStageStore = create<StageStore>((set) => ({
       members,
       customRoles: customRoles || [],
       customCueTypes: customCueTypes || [],
+      cueTypeColorOverrides: (cueTypeColors as Record<string, string>) || {},
+      cueTypeColorOverridesLight: (cueTypeColorsLight as Record<string, string>) || {},
     }),
 
   activeCueId: null,

@@ -27,12 +27,14 @@ export async function GET(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { smtpUser: true, smtpPass: true },
+    select: { smtpUser: true, smtpPass: true, cueTypeColors: true, cueTypeColorsLight: true },
   });
 
   return NextResponse.json({
     smtpUser: project?.smtpUser || "",
     smtpConfigured: !!project?.smtpPass,
+    cueTypeColors: project?.cueTypeColors || {},
+    cueTypeColorsLight: project?.cueTypeColorsLight || {},
   });
 }
 
@@ -61,6 +63,8 @@ export async function PATCH(
   const data: Record<string, any> = {};
   if (body.smtpUser !== undefined) data.smtpUser = body.smtpUser || null;
   if (body.smtpPass !== undefined) data.smtpPass = body.smtpPass || null;
+  if (body.cueTypeColors !== undefined) data.cueTypeColors = body.cueTypeColors;
+  if (body.cueTypeColorsLight !== undefined) data.cueTypeColorsLight = body.cueTypeColorsLight;
 
   await prisma.project.update({
     where: { id: projectId },

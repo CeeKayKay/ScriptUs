@@ -1,8 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import { useStageStore } from "@/lib/store";
 import { ROLES, ROLE_LIST } from "@/lib/roles";
-import { CUE_TYPES } from "@/lib/cue-types";
+import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectRole } from "@/types";
 
@@ -11,8 +12,12 @@ interface RoleSwitcherProps {
 }
 
 export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
-  const { activeRole, setActiveRole } = useStageStore();
+  const { activeRole, setActiveRole, cueTypeColorOverrides, cueTypeColorOverridesLight } = useStageStore();
   const activeConfig = ROLES[activeRole];
+  const effCueTypes = useMemo(() => {
+    const t = getCurrentTheme();
+    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
   const isMobile = useIsMobile();
 
   return (
@@ -106,7 +111,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
         )}
 
         {activeConfig.visibleCueTypes.map((type) => {
-          const config = CUE_TYPES[type];
+          const config = effCueTypes[type] || CUE_TYPES[type];
           if (!config) return null;
           return (
             <span

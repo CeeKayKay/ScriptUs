@@ -87,6 +87,11 @@ model Project {
   smtpUser    String?
   smtpPass    String?   // Gmail App Password
 
+  // Per-project color overrides for built-in cue types (per theme)
+  // JSON object: { "LIGHT": "#FF0000", "SOUND": "#00FF00", ... }
+  cueTypeColors     Json? // dark theme overrides
+  cueTypeColorsLight Json? // light theme overrides
+
   members        ProjectMember[]
   scenes         Scene[]
   cues           Cue[]

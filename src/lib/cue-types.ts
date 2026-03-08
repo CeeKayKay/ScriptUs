@@ -74,3 +74,37 @@ export function getCueTypesForRole(role: ProjectRole): CueType[] {
     (ct) => ct.type
   );
 }
+
+/** Convert a hex color like "#47B8E8" to rgba components for bg/border */
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+
+/** Detect current theme from document class */
+export function getCurrentTheme(): "dark" | "light" {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.classList.contains("light") ? "light" : "dark";
+}
+
+/** Get effective CUE_TYPES with per-project color overrides applied */
+export function getEffectiveCueTypes(
+  overrides: Record<string, string>
+): Record<CueType, CueTypeConfig> {
+  if (!overrides || Object.keys(overrides).length === 0) return CUE_TYPES;
+  const result = { ...CUE_TYPES };
+  for (const [type, color] of Object.entries(overrides)) {
+    if (type in result && color) {
+      const base = result[type as CueType];
+      const rgb = hexToRgb(color);
+      result[type as CueType] = {
+        ...base,
+        color,
+        bgColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)` : color + "14",
+        borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)` : color + "40",
+      };
+    }
+  }
+  return result;
+}

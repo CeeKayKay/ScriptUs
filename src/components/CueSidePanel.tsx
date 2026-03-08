@@ -3,7 +3,7 @@
 import { useMemo, useState, useRef } from "react";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
-import { CUE_TYPES } from "@/lib/cue-types";
+import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { CueView } from "@/types";
 
@@ -20,10 +20,16 @@ export function CueSidePanel() {
     reorderCuesInStore,
     removeCueFromLine,
     openCueEditor,
+    cueTypeColorOverrides,
+    cueTypeColorOverridesLight,
   } = useStageStore();
 
   const roleConfig = ROLES[activeRole];
   const isMobile = useIsMobile();
+  const effCueTypes = useMemo(() => {
+    const t = getCurrentTheme();
+    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
 
   const [expandedCueId, setExpandedCueId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -302,7 +308,7 @@ export function CueSidePanel() {
             : false;
           const isActive = cue.id === activeCueId;
           const isExpanded = cue.id === expandedCueId;
-          const cueConfig = CUE_TYPES[cue.type];
+          const cueConfig = effCueTypes[cue.type] || CUE_TYPES[cue.type];
           const isDragOver = cue.id === dragOverId;
 
           const statusLabel =

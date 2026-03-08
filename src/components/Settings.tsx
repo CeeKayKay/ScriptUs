@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { signOut } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
-import { CUE_TYPE_LIST } from "@/lib/cue-types";
+import { CUE_TYPE_LIST, CUE_TYPES, getEffectiveCueTypes } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTheme } from "@/hooks/useTheme";
 import type { ProjectRole, CustomRoleView, CustomCueTypeView } from "@/types";
@@ -54,6 +54,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     customRoles,
     customCueTypes,
     members,
+    cueTypeColorOverrides,
+    cueTypeColorOverridesLight,
+    setCueTypeColorOverride,
   } = useStageStore();
 
   const { theme, toggleTheme } = useTheme();
@@ -88,6 +91,14 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
 
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAddCueType, setShowAddCueType] = useState(false);
+
+  // --- Built-in cue type color editing ---
+  const [editingBuiltinCueType, setEditingBuiltinCueType] = useState<string | null>(null);
+  const [builtinCueColorSaving, setBuiltinCueColorSaving] = useState(false);
+  const effectiveCueTypesDark = getEffectiveCueTypes(cueTypeColorOverrides);
+  const effectiveCueTypesLight = getEffectiveCueTypes(cueTypeColorOverridesLight);
+  // Show colors for current theme
+  const effectiveCueTypes = theme === "light" ? effectiveCueTypesLight : effectiveCueTypesDark;
 
   // --- SMTP state ---
   const [smtpUser, setSmtpUser] = useState("");
@@ -208,6 +219,47 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     } catch (e: any) {
       setRoleError(e.message);
     }
+  };
+
+  const handleBuiltinCueColorChange = async (cueType: string, color: string, colorTheme: "dark" | "light") => {
+    setBuiltinCueColorSaving(true);
+    try {
+      const source = colorTheme === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides;
+      const newOverrides = { ...source, [cueType]: color };
+      const field = colorTheme === "light" ? "cueTypeColorsLight" : "cueTypeColors";
+      const res = await fetch(`/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: newOverrides }),
+      });
+      if (res.ok) {
+        setCueTypeColorOverride(cueType, color, colorTheme);
+      }
+    } catch {}
+    setBuiltinCueColorSaving(false);
+  };
+
+  const handleResetBuiltinCueColor = async (cueType: string, colorTheme: "dark" | "light") => {
+    setBuiltinCueColorSaving(true);
+    try {
+      const source = colorTheme === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides;
+      const newOverrides = { ...source };
+      delete newOverrides[cueType];
+      const field = colorTheme === "light" ? "cueTypeColorsLight" : "cueTypeColors";
+      const res = await fetch(`/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: newOverrides }),
+      });
+      if (res.ok) {
+        if (colorTheme === "light") {
+          useStageStore.getState().setCueTypeColorOverridesLight(newOverrides);
+        } else {
+          useStageStore.getState().setCueTypeColorOverrides(newOverrides);
+        }
+      }
+    } catch {}
+    setBuiltinCueColorSaving(false);
   };
 
   const handleAddCueType = async () => {
@@ -1106,56 +1158,193 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   Built-in Cue Types
                 </div>
                 <div className="space-y-1.5">
-                  {CUE_TYPE_LIST.map((ct) => (
-                    <div
-                      key={ct.type}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg"
-                      style={{
-                        background: ct.bgColor,
-                        border: `1px solid ${ct.borderColor}`,
-                      }}
-                    >
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-sm"
-                        style={{
-                          background: ct.color + "40",
-                          border: `1px solid ${ct.color}`,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontFamily: "DM Mono, monospace",
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: ct.color,
-                        }}
-                      >
-                        {ct.label}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: "DM Mono, monospace",
-                          fontSize: 12,
-                          color: "var(--stage-text)",
-                        }}
-                      >
-                        ({ct.type})
-                      </span>
-                      <span
-                        className="ml-auto"
-                        style={{
-                          fontFamily: "DM Mono, monospace",
-                          fontSize: 11,
-                          color: "var(--stage-text)",
-                          border: "1px solid var(--stage-border-subtle)",
-                          borderRadius: 4,
-                          padding: "1px 5px",
-                        }}
-                      >
-                        built-in
-                      </span>
-                    </div>
-                  ))}
+                  {CUE_TYPE_LIST.map((ct) => {
+                    const eff = effectiveCueTypes[ct.type];
+                    const effDark = effectiveCueTypesDark[ct.type];
+                    const effLight = effectiveCueTypesLight[ct.type];
+                    const isEditing = editingBuiltinCueType === ct.type;
+                    const hasDarkOverride = ct.type in cueTypeColorOverrides;
+                    const hasLightOverride = ct.type in cueTypeColorOverridesLight;
+                    const hasOverride = hasDarkOverride || hasLightOverride;
+                    return (
+                      <div key={ct.type}>
+                        <div
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg group cursor-pointer"
+                          style={{
+                            background: eff.bgColor,
+                            border: `1px solid ${eff.borderColor}`,
+                          }}
+                          onClick={() => setEditingBuiltinCueType(isEditing ? null : ct.type)}
+                        >
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-sm"
+                            style={{
+                              background: eff.color + "40",
+                              border: `1px solid ${eff.color}`,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: eff.color,
+                            }}
+                          >
+                            {ct.label}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 12,
+                              color: "var(--stage-text)",
+                            }}
+                          >
+                            ({ct.type})
+                          </span>
+                          <span className="ml-auto flex items-center gap-2">
+                            {hasOverride && (
+                              <span
+                                style={{
+                                  fontFamily: "DM Mono, monospace",
+                                  fontSize: 10,
+                                  color: "var(--stage-muted)",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                customized
+                              </span>
+                            )}
+                            <span
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{
+                                fontFamily: "DM Mono, monospace",
+                                fontSize: 11,
+                                color: "var(--stage-text)",
+                                border: "1px solid var(--stage-border-subtle)",
+                                borderRadius: 4,
+                                padding: "1px 6px",
+                              }}
+                            >
+                              {isEditing ? "Close" : "Edit Color"}
+                            </span>
+                          </span>
+                        </div>
+                        {isEditing && (
+                          <div
+                            className="mt-1 px-3 py-3 rounded-lg space-y-4"
+                            style={{
+                              background: "var(--stage-surface)",
+                              border: "1px solid var(--stage-border-subtle)",
+                            }}
+                          >
+                            {/* Dark theme color */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span style={{ ...labelStyle, fontSize: 12 }}>Dark Theme</span>
+                                <span
+                                  className="inline-block w-3 h-3 rounded-sm"
+                                  style={{ background: effDark.color, border: `1px solid ${effDark.color}80` }}
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {PRESET_COLORS.map((c) => (
+                                  <button
+                                    key={c}
+                                    onClick={() => handleBuiltinCueColorChange(ct.type, c, "dark")}
+                                    disabled={builtinCueColorSaving}
+                                    className="w-7 h-7 rounded-md transition-transform hover:scale-110"
+                                    style={{
+                                      background: c,
+                                      border: effDark.color === c ? "2px solid white" : "2px solid transparent",
+                                      boxShadow: effDark.color === c ? `0 0 0 1px ${c}` : "none",
+                                      cursor: "pointer",
+                                      opacity: builtinCueColorSaving ? 0.5 : 1,
+                                    }}
+                                    title={c}
+                                  />
+                                ))}
+                                <input
+                                  type="color"
+                                  value={effDark.color}
+                                  onChange={(e) => handleBuiltinCueColorChange(ct.type, e.target.value, "dark")}
+                                  disabled={builtinCueColorSaving}
+                                  className="w-7 h-7 rounded-md cursor-pointer"
+                                  style={{ border: "2px solid var(--stage-border)", padding: 0, background: "none" }}
+                                  title="Custom color"
+                                />
+                              </div>
+                              {hasDarkOverride && (
+                                <button
+                                  onClick={() => handleResetBuiltinCueColor(ct.type, "dark")}
+                                  disabled={builtinCueColorSaving}
+                                  style={{
+                                    fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-muted)",
+                                    background: "none", border: "1px solid var(--stage-border-subtle)",
+                                    borderRadius: 4, padding: "2px 8px", cursor: "pointer",
+                                    opacity: builtinCueColorSaving ? 0.5 : 1,
+                                  }}
+                                >
+                                  Reset ({CUE_TYPES[ct.type].color})
+                                </button>
+                              )}
+                            </div>
+                            {/* Light theme color */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span style={{ ...labelStyle, fontSize: 12 }}>Light Theme</span>
+                                <span
+                                  className="inline-block w-3 h-3 rounded-sm"
+                                  style={{ background: effLight.color, border: `1px solid ${effLight.color}80` }}
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {PRESET_COLORS.map((c) => (
+                                  <button
+                                    key={c}
+                                    onClick={() => handleBuiltinCueColorChange(ct.type, c, "light")}
+                                    disabled={builtinCueColorSaving}
+                                    className="w-7 h-7 rounded-md transition-transform hover:scale-110"
+                                    style={{
+                                      background: c,
+                                      border: effLight.color === c ? "2px solid #333" : "2px solid transparent",
+                                      boxShadow: effLight.color === c ? `0 0 0 1px ${c}` : "none",
+                                      cursor: "pointer",
+                                      opacity: builtinCueColorSaving ? 0.5 : 1,
+                                    }}
+                                    title={c}
+                                  />
+                                ))}
+                                <input
+                                  type="color"
+                                  value={effLight.color}
+                                  onChange={(e) => handleBuiltinCueColorChange(ct.type, e.target.value, "light")}
+                                  disabled={builtinCueColorSaving}
+                                  className="w-7 h-7 rounded-md cursor-pointer"
+                                  style={{ border: "2px solid var(--stage-border)", padding: 0, background: "none" }}
+                                  title="Custom color"
+                                />
+                              </div>
+                              {hasLightOverride && (
+                                <button
+                                  onClick={() => handleResetBuiltinCueColor(ct.type, "light")}
+                                  disabled={builtinCueColorSaving}
+                                  style={{
+                                    fontFamily: "DM Mono, monospace", fontSize: 11, color: "var(--stage-muted)",
+                                    background: "none", border: "1px solid var(--stage-border-subtle)",
+                                    borderRadius: 4, padding: "2px 8px", cursor: "pointer",
+                                    opacity: builtinCueColorSaving ? 0.5 : 1,
+                                  }}
+                                >
+                                  Reset ({CUE_TYPES[ct.type].color})
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

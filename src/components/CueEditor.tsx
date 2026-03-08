@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useStageStore } from "@/lib/store";
-import { CUE_TYPES, CUE_TYPE_LIST } from "@/lib/cue-types";
+import { CUE_TYPES, CUE_TYPE_LIST, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { CueType, CueStatus } from "@/types";
 
@@ -12,9 +12,13 @@ interface CueEditorProps {
 }
 
 export function CueEditor({ projectId, broadcast }: CueEditorProps) {
-  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore } = useStageStore();
+  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore, cueTypeColorOverrides, cueTypeColorOverridesLight } = useStageStore();
   const isEditing = !!editingCue;
   const isMobile = useIsMobile();
+  const effCueTypes = useMemo(() => {
+    const t = getCurrentTheme();
+    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
 
   // Auto-select cue type based on active role
   const defaultType = (): CueType => {
@@ -71,7 +75,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   // Auto-generate or update label when type/number changes
   // Preserves any user-typed suffix after the Q number
   useEffect(() => {
-    const config = CUE_TYPES[type];
+    const config = effCueTypes[type];
     setLabel((prev) => {
       if (!prev) return `${config.label} Q${number}`;
       // Match pattern like "PROP Q3 - Gummy Worm" → replace Q3 with Q{number}
@@ -350,9 +354,9 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                           <>
                             {lineText.slice(0, idx)}
                             <span style={{
-                              background: `${CUE_TYPES[type]?.color || "var(--stage-gold)"}20`,
-                              borderBottom: `2px solid ${CUE_TYPES[type]?.color || "var(--stage-gold)"}`,
-                              color: CUE_TYPES[type]?.color || "var(--stage-gold)",
+                              background: `${effCueTypes[type]?.color || "var(--stage-gold)"}20`,
+                              borderBottom: `2px solid ${effCueTypes[type]?.color || "var(--stage-gold)"}`,
+                              color: effCueTypes[type]?.color || "var(--stage-gold)",
                               borderRadius: 2,
                               padding: "1px 0",
                             }}>
@@ -382,7 +386,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                   lineHeight: 1.6,
                   background: "rgba(232, 197, 71, 0.04)",
                   border: "1px solid rgba(232, 197, 71, 0.15)",
-                  borderLeft: `3px solid ${CUE_TYPES[type]?.color || "var(--stage-gold)"}80`,
+                  borderLeft: `3px solid ${effCueTypes[type]?.color || "var(--stage-gold)"}80`,
                   color: "var(--stage-text)",
                   outline: "none",
                 }}

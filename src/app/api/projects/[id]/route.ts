@@ -92,6 +92,8 @@ export async function GET(
       color: r.color,
       visibleCueTypes: r.visibleCueTypes,
     })),
+    cueTypeColors: project.cueTypeColors as Record<string, string> | null,
+    cueTypeColorsLight: project.cueTypeColorsLight as Record<string, string> | null,
     customCueTypes: project.customCueTypes.map((ct) => ({
       id: ct.id,
       type: ct.type,
