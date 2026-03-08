@@ -551,7 +551,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
         sel.removeAllRanges();
         sel.addRange(saved.range);
       } else if (sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-        // Fallback: place cursor at end
         const range = document.createRange();
         range.selectNodeContents(editor);
         range.collapse(false);
@@ -560,41 +559,64 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       }
     }
 
-    // Find the top-level <div> the cursor is in, then insert after it
+    // --- CRDT path: insert into Y.Text, let observer rebuild DOM ---
+    if (yDoc) {
+      const yText = yDoc.getText(`scene-${targetSceneId}`);
+      // Get cursor offset in Y.Text coordinates
+      let offset = getCursorTextOffset(editor) ?? yText.length;
+      const fullText = yText.toString();
+
+      // Move offset to end of current line (don't split text)
+      const nextNewline = fullText.indexOf("\n", offset);
+      if (nextNewline !== -1) {
+        offset = nextNewline;
+      } else {
+        offset = fullText.length;
+      }
+
+      // Insert: newline, character name, newline (for dialogue typing)
+      const insertText = `\n${character}\n`;
+      yDoc.transact(() => {
+        yText.insert(offset, insertText);
+      }, "character-insert");
+
+      // Observer rebuilds DOM synchronously. Place cursor on the dialogue line.
+      const cursorPos = offset + insertText.length;
+      setCursorTextOffset(editor, cursorPos);
+      editor.focus();
+      return;
+    }
+
+    // --- Fallback (no CRDT): DOM-based insertion ---
     const range = sel?.getRangeAt(0);
     if (!range) return;
 
-    // Walk up from cursor to find the direct child div of the editor
+    // Walk up to find the direct child div of the editor
     let anchorBlock: Node | null = range.startContainer;
     while (anchorBlock && anchorBlock.parentNode !== editor) {
       anchorBlock = anchorBlock.parentNode;
     }
 
-    // Build the character name element
     const charDiv = document.createElement("div");
     charDiv.setAttribute("data-character", character);
     charDiv.setAttribute("style", CHAR_NAME_STYLE);
     charDiv.textContent = character;
 
-    // Build the dialogue line (empty, for typing)
     const dialogueDiv = document.createElement("div");
     dialogueDiv.appendChild(document.createElement("br"));
 
-    // Insert after the current block (or at end if no block found)
     const refNode = anchorBlock?.nextSibling ?? null;
     editor.insertBefore(charDiv, refNode);
     editor.insertBefore(dialogueDiv, refNode);
 
-    // Place cursor inside the dialogue div so user can type immediately
     const newRange = document.createRange();
     newRange.selectNodeContents(dialogueDiv);
     newRange.collapse(true);
     sel!.removeAllRanges();
     sel!.addRange(newRange);
 
-    // Trigger input event so save/sync fires
     editor.dispatchEvent(new Event("input", { bubbles: true }));
-  }, [pendingDialogue, scenes, setPendingDialogue]);
+  }, [pendingDialogue, yDoc, scenes, setPendingDialogue]);
 
   const handleEditSceneTitle = useCallback(
     async (sceneId: string, title: string) => {
