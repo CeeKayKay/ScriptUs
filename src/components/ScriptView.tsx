@@ -373,27 +373,30 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
       }
     }
 
-    // Build the character name element and dialogue line
+    // Find the top-level <div> the cursor is in, then insert after it
+    const range = sel?.getRangeAt(0);
+    if (!range) return;
+
+    // Walk up from cursor to find the direct child div of the editor
+    let anchorBlock: Node | null = range.startContainer;
+    while (anchorBlock && anchorBlock.parentNode !== editor) {
+      anchorBlock = anchorBlock.parentNode;
+    }
+
+    // Build the character name element
     const charDiv = document.createElement("div");
     charDiv.setAttribute("data-character", character);
     charDiv.setAttribute("style", CHAR_NAME_STYLE);
     charDiv.textContent = character;
 
+    // Build the dialogue line (empty, for typing)
     const dialogueDiv = document.createElement("div");
     dialogueDiv.appendChild(document.createElement("br"));
 
-    // Insert at cursor using Range API
-    const range = sel?.getRangeAt(0);
-    if (!range) return;
-
-    // If cursor is inside a text node, split at cursor and insert after
-    range.deleteContents();
-
-    // Insert dialogue line first, then character name before it (insertNode prepends)
-    const frag = document.createDocumentFragment();
-    frag.appendChild(charDiv);
-    frag.appendChild(dialogueDiv);
-    range.insertNode(frag);
+    // Insert after the current block (or at end if no block found)
+    const refNode = anchorBlock?.nextSibling ?? null;
+    editor.insertBefore(charDiv, refNode);
+    editor.insertBefore(dialogueDiv, refNode);
 
     // Place cursor inside the dialogue div so user can type immediately
     const newRange = document.createRange();
@@ -402,7 +405,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor }
     sel!.removeAllRanges();
     sel!.addRange(newRange);
 
-    // Trigger input event so typing broadcast fires
+    // Trigger input event so save/sync fires
     editor.dispatchEvent(new Event("input", { bubbles: true }));
   }, [pendingDialogue, scenes, setPendingDialogue]);
 
