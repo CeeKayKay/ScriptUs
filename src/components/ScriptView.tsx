@@ -1908,7 +1908,10 @@ function SceneTextBox({
           // Don't blur if clicking toolbar or selection popup
           const related = e.relatedTarget as HTMLElement | null;
           if (related?.closest("[data-toolbar]")) {
-            setTimeout(() => localRef.current?.focus(), 0);
+            // Don't re-focus if the target is an input/textarea (e.g. comment box)
+            if (related.tagName !== "TEXTAREA" && related.tagName !== "INPUT") {
+              setTimeout(() => localRef.current?.focus(), 0);
+            }
             return;
           }
           e.currentTarget.style.borderColor = "var(--stage-border-subtle)";
