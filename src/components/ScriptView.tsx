@@ -268,7 +268,8 @@ function positionSideBubbles(container: HTMLElement) {
     bubble.style.pointerEvents = "auto";
     bubble.style.cursor = "pointer";
     bubble.style.display = "flex";
-    bubble.style.alignItems = "center";
+    // flex-end so the connecting line aligns with the bottom (underline level)
+    bubble.style.alignItems = "flex-end";
     bubble.style.whiteSpace = "nowrap";
     bubble.style.zIndex = "2";
 
@@ -293,9 +294,12 @@ function positionSideBubbles(container: HTMLElement) {
     line.style.borderTop = `2px solid ${color}`;
     line.style.flexShrink = "0";
 
-    // Position vertically: align with the highlight's baseline (bottom of highlight)
-    const hlBottom = hlRect.bottom - lineDivRect.top;
-    bubble.style.top = `${hlBottom - 2}px`; // -2 to align with the 2px underline
+    // Position vertically: align bubble text with the highlight text.
+    // The bubble top matches the highlight top so text sits at the same level.
+    // With flex-end, the connecting line drops to the bottom of the bubble,
+    // matching the underline position of the highlighted text.
+    const hlTop = hlRect.top - lineDivRect.top;
+    bubble.style.top = `${hlTop}px`;
 
     if (dir === "left") {
       // Bubble in the left margin: line goes from pill to highlight's left edge
