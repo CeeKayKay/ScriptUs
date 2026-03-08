@@ -1077,7 +1077,7 @@ function SceneTextBox({
 
       // Restore cursor adjusted for the remote edit delta
       if (isFocused && oldOffset !== null) {
-        const adjusted = adjustOffsetForDelta(oldOffset, event.changes.delta);
+        const adjusted = adjustOffsetForDelta(oldOffset, event.delta);
         setCursorTextOffset(localRef.current, adjusted);
       }
     };
