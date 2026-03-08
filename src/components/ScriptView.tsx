@@ -393,7 +393,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const [newSceneTitle, setNewSceneTitle] = useState("");
   const [sceneSaving, setSceneSaving] = useState(false);
 
-  const canWrite = ["STAGE_MANAGER", "DIRECTOR", "WRITER"].includes(activeRole);
+  const canWrite = activeRole === "WRITER";
 
   // --- Undo stack ---
   type UndoAction =
@@ -1430,6 +1430,15 @@ function SceneTextBox({
     </div>
   ) : null;
 
+  // For read-only: set innerHTML imperatively via ref so React re-renders
+  // (from selection popup state changes) don't destroy in-progress text selection
+  const readOnlyRef = useCallback((el: HTMLDivElement | null) => {
+    localRef.current = el;
+    if (el) {
+      el.innerHTML = displayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>';
+    }
+  }, [displayHtml]);
+
   if (!canEdit) {
     return (
       <div style={{ position: "relative" }}>
@@ -1440,7 +1449,7 @@ function SceneTextBox({
         )}
         {selectionPopupEl}
         <div
-          ref={(el) => { localRef.current = el; }}
+          ref={readOnlyRef}
           style={{
             fontFamily: "Libre Baskerville, serif",
             fontSize: scriptTextSize,
@@ -1448,9 +1457,8 @@ function SceneTextBox({
             lineHeight: 1.75,
             padding: isMobile ? "8px" : "8px 16px",
             minHeight: 60,
-          }}
-          dangerouslySetInnerHTML={{
-            __html: displayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>',
+            userSelect: "text",
+            cursor: "text",
           }}
         />
       </div>
