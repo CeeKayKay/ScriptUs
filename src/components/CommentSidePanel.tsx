@@ -174,7 +174,13 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
                 if (!isSelected) {
                   // Wait for React to re-render with the underline, then scroll
                   setTimeout(() => {
-                    // Find underlined span rendered by textToDisplayHtml
+                    // Find highlight mark in editable mode
+                    const mark = document.querySelector('mark[data-comment-highlight]');
+                    if (mark) {
+                      mark.scrollIntoView({ behavior: "smooth", block: "center" });
+                      return;
+                    }
+                    // Find underlined span rendered by textToDisplayHtml (read-only mode)
                     const highlighted = document.querySelector('span[style*="text-decoration:underline"][style*="47B8E8"]');
                     if (highlighted) {
                       highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
