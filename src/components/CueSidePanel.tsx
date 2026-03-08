@@ -262,7 +262,7 @@ export function CueSidePanel() {
         <div
           style={{
             fontFamily: "DM Mono, monospace",
-            fontSize: Math.round(scriptTextSize * 1.5),
+            fontSize: Math.round(scriptTextSize * 0.75),
             fontWeight: 700,
             color: roleConfig.color,
             letterSpacing: "0.1em",
@@ -275,7 +275,7 @@ export function CueSidePanel() {
           <span
             style={{
               fontFamily: "DM Mono, monospace",
-              fontSize: Math.round(scriptTextSize * 1.2),
+              fontSize: Math.round(scriptTextSize * 0.6),
               color: "var(--stage-text)",
             }}
           >
