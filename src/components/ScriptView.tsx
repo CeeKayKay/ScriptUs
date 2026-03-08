@@ -4,9 +4,10 @@ import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import * as Y from "yjs";
 import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
+import { CUE_TYPES } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
-import type { CueView, ScriptLineView, LineType, SceneView } from "@/types";
+import type { CueView, ScriptLineView, LineType, SceneView, CueType } from "@/types";
 
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
@@ -149,6 +150,115 @@ function textToHtml(text: string): string {
         const trimmed = line.trim();
         const c = escapeHtml(trimmed);
         // If line has trailing space (cursor placeholder), render as inline prefix
+        if (line.length > trimmed.length) {
+          const rest = line.substring(trimmed.length);
+          return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
+        }
+        return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
+      }
+      return `<div>${escapeHtml(line)}</div>`;
+    })
+    .join("");
+}
+
+/** Build annotated line content with cue badges and/or comment underlines */
+function annotateLine(
+  plainText: string,
+  cues: CueView[],
+  selectedCommentRef: string | null,
+): string {
+  type Ann = { start: number; end: number; type: "cue" | "comment"; cue?: CueView; color?: string };
+  const anns: Ann[] = [];
+
+  for (const cue of cues) {
+    if (!cue.scriptRef) continue;
+    const idx = plainText.indexOf(cue.scriptRef);
+    if (idx !== -1) {
+      const config = CUE_TYPES[cue.type];
+      anns.push({ start: idx, end: idx + cue.scriptRef.length, type: "cue", cue, color: config?.color || "#888" });
+    }
+  }
+
+  if (selectedCommentRef) {
+    const idx = plainText.indexOf(selectedCommentRef);
+    if (idx !== -1) {
+      anns.push({ start: idx, end: idx + selectedCommentRef.length, type: "comment" });
+    }
+  }
+
+  if (anns.length === 0) return "";
+
+  anns.sort((a, b) => a.start - b.start);
+
+  let result = "";
+  let pos = 0;
+  for (const ann of anns) {
+    if (ann.start > pos) result += escapeHtml(plainText.substring(pos, ann.start));
+    const segText = escapeHtml(plainText.substring(ann.start, ann.end));
+    if (ann.type === "cue" && ann.cue) {
+      const config = CUE_TYPES[ann.cue.type];
+      result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
+      result += `<span contenteditable="false" style="position:absolute;top:-1.5em;left:0;font-family:DM Mono,monospace;font-size:9px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:3px;padding:0 4px;white-space:nowrap;pointer-events:auto;cursor:pointer;line-height:1.4;" data-cue-id="${ann.cue.id}">${escapeHtml(ann.cue.label)}</span>`;
+      result += segText;
+      result += `</span>`;
+    } else if (ann.type === "comment") {
+      result += `<span style="text-decoration:underline;text-decoration-color:#47B8E8;text-underline-offset:3px;text-decoration-thickness:2px;background:#47B8E810;border-radius:2px;padding:1px 0;">${segText}</span>`;
+    }
+    pos = ann.end;
+  }
+  if (pos < plainText.length) result += escapeHtml(plainText.substring(pos));
+  return result;
+}
+
+/** Convert plain text to display HTML with cue badges and comment underlines */
+function textToDisplayHtml(
+  text: string,
+  cues: CueView[],
+  visibleCueTypes: CueType[],
+  selectedCommentRef: string | null,
+): string {
+  if (!text) return "<div><br></div>";
+
+  const activeCues = cues.filter((c) => c.scriptRef && visibleCueTypes.includes(c.type));
+
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line) return "<div><br></div>";
+
+      // Check for annotations on this line
+      const annotated = annotateLine(line, activeCues, selectedCommentRef);
+      const hasCueBadge = activeCues.some((c) => c.scriptRef && line.includes(c.scriptRef));
+      const padStyle = hasCueBadge ? ` style="position:relative;padding-top:1.8em;"` : "";
+
+      if (annotated) {
+        const charPrefix = extractCharacterPrefix(line);
+        if (charPrefix) {
+          const c = escapeHtml(charPrefix);
+          // Re-annotate only the dialogue portion after the prefix
+          const dialoguePart = line.substring(charPrefix.length);
+          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef);
+          const dialogueHtml = dialogueAnnotated || escapeHtml(dialoguePart);
+          return `<div data-character="${c}"${padStyle}><span style="${CHAR_NAME_STYLE}">${c}</span>${dialogueHtml}</div>`;
+        }
+        if (isCharacterName(line)) {
+          const trimmed = line.trim();
+          const c = escapeHtml(trimmed);
+          return `<div data-character="${c}" style="${CHAR_NAME_STYLE}">${c}</div>`;
+        }
+        return `<div${padStyle}>${annotated}</div>`;
+      }
+
+      // No annotations — use standard textToHtml logic
+      const charPrefix = extractCharacterPrefix(line);
+      if (charPrefix) {
+        const rest = line.substring(charPrefix.length);
+        const c = escapeHtml(charPrefix);
+        return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
+      }
+      if (isCharacterName(line)) {
+        const trimmed = line.trim();
+        const c = escapeHtml(trimmed);
         if (line.length > trimmed.length) {
           const rest = line.substring(trimmed.length);
           return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
@@ -914,13 +1024,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
           }}
         >
           <ToolbarButton
-            label="Stage Direction"
-            title="Toggle italic stage direction (Ctrl+I)"
-            italic
-            onClick={applyStageDirection}
-          />
-          <div style={{ width: 1, height: 18, background: "var(--stage-border)", margin: "0 4px" }} />
-          <ToolbarButton
             label={`\u21A9 Undo${undoCount > 0 ? ` (${undoCount})` : ""}`}
             title="Undo last edit (Ctrl+Z)"
             onClick={handleUndo}
@@ -1305,6 +1408,29 @@ function SceneTextBox({
 
   // Read-only display HTML (updated by Y.Text observer)
   const [displayHtml, setDisplayHtml] = useState(fallbackHtml);
+  // Raw text for annotation overlay (cues + comment underlines)
+  const [rawText, setRawText] = useState("");
+  const selectedCommentRef = useStageStore((s) => s.selectedCommentRef);
+  const roleConfig = ROLES[activeRole as keyof typeof ROLES];
+
+  // All cues in this scene
+  const sceneCues = useMemo(
+    () => scene.lines.flatMap((l) => l.cues || []),
+    [scene.lines]
+  );
+
+  // Compute annotated display HTML for read-only mode
+  const annotatedDisplayHtml = useMemo(() => {
+    if (!rawText && !sceneCues.length && !selectedCommentRef) return displayHtml;
+    const text = rawText || "";
+    if (!text) return displayHtml;
+    const visibleTypes = (roleConfig?.visibleCueTypes || []) as CueType[];
+    const hasAnnotations =
+      sceneCues.some((c) => c.scriptRef && visibleTypes.includes(c.type) && text.includes(c.scriptRef)) ||
+      (selectedCommentRef && text.includes(selectedCommentRef));
+    if (!hasAnnotations) return displayHtml;
+    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef);
+  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig]);
 
   // Get Y.Text for this scene
   const yText = useMemo(
@@ -1331,6 +1457,7 @@ function SceneTextBox({
       // Set initial DOM
       const text = yText.toString();
       lastTextRef.current = text;
+      setRawText(text);
       const html = textToHtml(text);
       setDisplayHtml(html);
       if (localRef.current && document.activeElement !== localRef.current) {
@@ -1345,6 +1472,7 @@ function SceneTextBox({
 
       const newText = yText.toString();
       lastTextRef.current = newText;
+      setRawText(newText);
       const newHtml = textToHtml(newText);
       setDisplayHtml(newHtml); // For read-only mode
 
@@ -1645,9 +1773,9 @@ function SceneTextBox({
   const readOnlyRef = useCallback((el: HTMLDivElement | null) => {
     localRef.current = el;
     if (el) {
-      el.innerHTML = displayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>';
+      el.innerHTML = annotatedDisplayHtml || '<span style="color:var(--stage-faint);font-style:italic;">No content yet</span>';
     }
-  }, [displayHtml]);
+  }, [annotatedDisplayHtml]);
 
   if (!canEdit) {
     return (
@@ -1661,6 +1789,14 @@ function SceneTextBox({
         {commentInputEl}
         <div
           ref={readOnlyRef}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            const cueId = target.getAttribute("data-cue-id");
+            if (cueId) {
+              const cue = sceneCues.find((c) => c.id === cueId);
+              if (cue) openCueEditor(cue);
+            }
+          }}
           style={{
             fontFamily: "Libre Baskerville, serif",
             fontSize: scriptTextSize,

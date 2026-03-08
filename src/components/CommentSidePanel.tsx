@@ -17,6 +17,8 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
     scriptTextSize,
     resolveComment,
     removeComment,
+    selectedCommentRef,
+    setSelectedCommentRef,
   } = useStageStore();
 
   const isMobile = useIsMobile();
@@ -154,14 +156,22 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
           </div>
         )}
 
-        {filtered.map((c) => (
+        {filtered.map((c) => {
+          const isSelected = selectedCommentRef === c.scriptRef && !!c.scriptRef;
+          return (
           <div
             key={c.id}
             className="group/comment mb-2 rounded-lg p-3 transition-colors hover:bg-white/3"
             style={{
-              background: "var(--stage-surface)",
-              border: "1px solid var(--stage-border-subtle)",
-              borderLeft: "3px solid #47B8E840",
+              background: isSelected ? "#47B8E810" : "var(--stage-surface)",
+              border: isSelected ? "1px solid #47B8E840" : "1px solid var(--stage-border-subtle)",
+              borderLeft: isSelected ? "3px solid #47B8E8" : "3px solid #47B8E840",
+              cursor: c.scriptRef ? "pointer" : "default",
+            }}
+            onClick={() => {
+              if (c.scriptRef) {
+                setSelectedCommentRef(isSelected ? null : c.scriptRef);
+              }
             }}
           >
             {/* Author + meta */}
@@ -264,7 +274,8 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

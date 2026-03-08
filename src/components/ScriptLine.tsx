@@ -471,11 +471,12 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
           data-line-id={line.id}
           className="pt-6 pb-3 group/scene"
           style={{
-            fontFamily: "Playfair Display, serif",
+            fontFamily: "DM Mono, monospace",
             fontSize: Math.round(scriptTextSize * 1.15),
-            fontWeight: 600,
-            color: "var(--stage-text)",
-            letterSpacing: "0.08em",
+            fontWeight: 700,
+            color: "var(--stage-gold)",
+            letterSpacing: "0.05em",
+            textTransform: "uppercase",
             borderBottom: "1px solid var(--stage-hover-strong)",
             marginBottom: 12,
             position: "relative",

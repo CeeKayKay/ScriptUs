@@ -77,6 +77,8 @@ interface StageStore {
   addComment: (lineId: string, comment: CommentView) => void;
   resolveComment: (commentId: string) => void;
   removeComment: (commentId: string) => void;
+  selectedCommentRef: string | null;
+  setSelectedCommentRef: (ref: string | null) => void;
 
   // Writer: Characters & Locations
   characterGroups: CharacterGroupView[];
@@ -341,7 +343,9 @@ export const useStageStore = create<StageStore>((set) => ({
     })),
 
   isCommentPanelOpen: false,
-  toggleCommentPanel: () => set((s) => ({ isCommentPanelOpen: !s.isCommentPanelOpen })),
+  toggleCommentPanel: () => set((s) => ({ isCommentPanelOpen: !s.isCommentPanelOpen, selectedCommentRef: s.isCommentPanelOpen ? null : s.selectedCommentRef })),
+  selectedCommentRef: null,
+  setSelectedCommentRef: (ref) => set({ selectedCommentRef: ref }),
 
   addComment: (lineId, comment) =>
     set((s) => ({
