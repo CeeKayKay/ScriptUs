@@ -369,7 +369,7 @@ export function CueSidePanel() {
                     fontFamily: "DM Mono, monospace",
                     fontSize: Math.round(scriptTextSize * 1.3),
                     fontWeight: 700,
-                    color: isVisible ? cueConfig.color : "var(--stage-dim)",
+                    color: cueConfig.color,
                     letterSpacing: "0.03em",
                   }}
                 >
