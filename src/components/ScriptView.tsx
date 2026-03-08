@@ -339,6 +339,8 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const lastFocusedSceneRef = useRef<string | null>(null);
   // Track last cursor position so character insertion works after editor blur
   const lastEditorRangeRef = useRef<{ sceneId: string; range: Range } | null>(null);
+  // Track cursor as text offset (survives DOM changes and focus/blur cycles)
+  const lastCursorOffsetRef = useRef<{ sceneId: string; offset: number } | null>(null);
 
   // Save cursor position whenever selection changes inside a scene editor
   useEffect(() => {
@@ -349,6 +351,10 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       for (const [sceneId, editor] of Object.entries(sceneEditorRefs.current)) {
         if (editor && editor.contains(range.commonAncestorContainer)) {
           lastEditorRangeRef.current = { sceneId, range: range.cloneRange() };
+          const offset = getCursorTextOffset(editor);
+          if (offset !== null) {
+            lastCursorOffsetRef.current = { sceneId, offset };
+          }
           break;
         }
       }
@@ -541,9 +547,78 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     const editor = sceneEditorRefs.current[targetSceneId];
     if (!editor) return;
 
+    // Read saved cursor offset BEFORE calling focus() (focus triggers selectionchange
+    // which would overwrite the saved position with the default focus position)
+    const savedOffset = lastCursorOffsetRef.current;
+    const hasSavedCursor = savedOffset && savedOffset.sceneId === targetSceneId;
+
+    // --- CRDT path: insert into Y.Text, let observer rebuild DOM ---
+    if (yDoc) {
+      const yText = yDoc.getText(`scene-${targetSceneId}`);
+      const fullText = yText.toString();
+
+      // Use saved cursor offset, fallback to end
+      let offset = hasSavedCursor ? savedOffset.offset : yText.length;
+      // Clamp to valid range
+      offset = Math.min(offset, fullText.length);
+
+      // Determine what's on the current line
+      const lineStart = fullText.lastIndexOf("\n", offset - 1) + 1;
+      const lineEnd = fullText.indexOf("\n", offset);
+      const currentLine = fullText.substring(lineStart, lineEnd === -1 ? fullText.length : lineEnd);
+      const isOnEmptyLine = currentLine.trim() === "";
+
+      let insertText: string;
+      let insertAt: number;
+
+      if (isOnEmptyLine) {
+        // Cursor is on an empty/blank line — insert character name right here
+        // Replace the empty line content with the character name + new line for dialogue
+        insertText = `${character}\n`;
+        insertAt = lineStart;
+        // Delete the empty line's whitespace if any
+        const emptyLen = currentLine.length;
+        if (emptyLen > 0) {
+          yDoc.transact(() => {
+            yText.delete(lineStart, emptyLen);
+            yText.insert(lineStart, insertText);
+          }, "character-insert");
+        } else {
+          yDoc.transact(() => {
+            yText.insert(insertAt, insertText);
+          }, "character-insert");
+        }
+      } else {
+        // Cursor is in a non-empty line — move to end of current line, add character below
+        const endOfLine = lineEnd === -1 ? fullText.length : lineEnd;
+        insertText = `\n${character}\n`;
+        insertAt = endOfLine;
+        yDoc.transact(() => {
+          yText.insert(insertAt, insertText);
+        }, "character-insert");
+      }
+
+      // Place cursor on the dialogue line (after character name + newline)
+      const cursorPos = insertAt + insertText.length;
+
+      // Focus and set cursor position
+      editor.focus();
+      // Small delay to let the observer reconcile the DOM first
+      requestAnimationFrame(() => {
+        if (editor && document.activeElement === editor) {
+          setCursorTextOffset(editor, cursorPos);
+        } else {
+          editor.focus();
+          setCursorTextOffset(editor, cursorPos);
+        }
+      });
+      return;
+    }
+
+    // --- Fallback (no CRDT): DOM-based insertion ---
     editor.focus();
 
-    // Restore saved cursor position (clicking the character button blurs the editor)
+    // Restore saved cursor position
     const sel = window.getSelection();
     if (sel) {
       const saved = lastEditorRangeRef.current;
@@ -559,35 +634,6 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
       }
     }
 
-    // --- CRDT path: insert into Y.Text, let observer rebuild DOM ---
-    if (yDoc) {
-      const yText = yDoc.getText(`scene-${targetSceneId}`);
-      // Get cursor offset in Y.Text coordinates
-      let offset = getCursorTextOffset(editor) ?? yText.length;
-      const fullText = yText.toString();
-
-      // Move offset to end of current line (don't split text)
-      const nextNewline = fullText.indexOf("\n", offset);
-      if (nextNewline !== -1) {
-        offset = nextNewline;
-      } else {
-        offset = fullText.length;
-      }
-
-      // Insert: newline, character name, newline (for dialogue typing)
-      const insertText = `\n${character}\n`;
-      yDoc.transact(() => {
-        yText.insert(offset, insertText);
-      }, "character-insert");
-
-      // Observer rebuilds DOM synchronously. Place cursor on the dialogue line.
-      const cursorPos = offset + insertText.length;
-      setCursorTextOffset(editor, cursorPos);
-      editor.focus();
-      return;
-    }
-
-    // --- Fallback (no CRDT): DOM-based insertion ---
     const range = sel?.getRangeAt(0);
     if (!range) return;
 
@@ -1069,16 +1115,91 @@ function SceneTextBox({
 
       if (!localRef.current) return;
 
-      // Get cursor offset in OLD DOM (before rebuild) as a Y.Text character offset
       const isFocused = document.activeElement === localRef.current;
-      const oldOffset = isFocused ? getCursorTextOffset(localRef.current) : null;
 
-      localRef.current.innerHTML = newHtml;
+      if (!isFocused) {
+        // Not focused — safe to do full rebuild
+        localRef.current.innerHTML = newHtml;
+        return;
+      }
 
-      // Restore cursor adjusted for the remote edit delta
-      if (isFocused && oldOffset !== null) {
-        const adjusted = adjustOffsetForDelta(oldOffset, event.delta);
-        setCursorTextOffset(localRef.current, adjusted);
+      // --- Focused: reconcile DOM at line level to preserve cursor ---
+      // Split new text into lines and build target divs
+      const newLines = newText.split("\n");
+      const editor = localRef.current;
+      const oldChildren = Array.from(editor.children) as HTMLElement[];
+
+      // Reconcile: update changed lines, add/remove as needed
+      for (let i = 0; i < Math.max(newLines.length, oldChildren.length); i++) {
+        if (i >= newLines.length) {
+          // Remove extra old children
+          while (editor.children.length > newLines.length) {
+            editor.removeChild(editor.lastChild!);
+          }
+          break;
+        }
+
+        const line = newLines[i];
+        const isChar = isCharacterName(line);
+        const expectedText = line || "";
+
+        if (i < oldChildren.length) {
+          // Update existing child only if content changed
+          const oldEl = oldChildren[i];
+          const oldText = oldEl.textContent || "";
+          const oldIsChar = oldEl.hasAttribute("data-character");
+
+          if (oldText !== expectedText || oldIsChar !== isChar) {
+            // Check if cursor is inside this child — if so, do a careful update
+            const sel = window.getSelection();
+            const cursorInThisChild = sel && sel.rangeCount > 0 && oldEl.contains(sel.anchorNode);
+
+            if (cursorInThisChild) {
+              // Cursor is here — only update attributes/style, leave text alone
+              // unless the text itself was changed by the remote (not just formatting)
+              if (oldText !== expectedText) {
+                // Remote edited this exact line — must update text, cursor will shift
+                if (isChar) {
+                  oldEl.setAttribute("data-character", escapeHtml(expectedText));
+                  oldEl.setAttribute("style", CHAR_NAME_STYLE);
+                } else {
+                  oldEl.removeAttribute("data-character");
+                  oldEl.removeAttribute("style");
+                }
+                oldEl.textContent = expectedText || "";
+                if (!expectedText) oldEl.appendChild(document.createElement("br"));
+              }
+            } else {
+              // Cursor is NOT here — safe to fully replace content
+              if (isChar) {
+                oldEl.setAttribute("data-character", escapeHtml(expectedText));
+                oldEl.setAttribute("style", CHAR_NAME_STYLE);
+                oldEl.textContent = expectedText;
+              } else {
+                oldEl.removeAttribute("data-character");
+                oldEl.removeAttribute("style");
+                if (expectedText) {
+                  oldEl.textContent = expectedText;
+                } else {
+                  oldEl.innerHTML = "<br>";
+                }
+              }
+            }
+          }
+        } else {
+          // Append new child
+          const div = document.createElement("div");
+          if (isChar) {
+            div.setAttribute("data-character", escapeHtml(expectedText));
+            div.setAttribute("style", CHAR_NAME_STYLE);
+            div.textContent = expectedText;
+          } else if (expectedText) {
+            div.textContent = expectedText;
+          } else {
+            div.appendChild(document.createElement("br"));
+          }
+          editor.appendChild(div);
+        }
       }
     };
 
