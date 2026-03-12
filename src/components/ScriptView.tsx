@@ -161,15 +161,30 @@ function textToHtml(text: string): string {
     .join("");
 }
 
+// Map cue types to their associated roles for bubble visibility
+const CUE_TYPE_TO_ROLE: Record<string, string> = {
+  LIGHT: "LIGHTING",
+  SOUND: "SOUND",
+  PROPS: "PROPS",
+  SET: "SET_DESIGN",
+  BLOCKING: "ACTOR",
+  PROJECTION: "STAGE_MANAGER",
+  FLY: "STAGE_MANAGER",
+  SPOT: "LIGHTING",
+};
+
 /** Build annotated line content with cue badges and/or comment underlines.
  *  sideBubbleDir: when set, cue labels render as side bubbles anchored to the
- *  line div edge with a connecting line, instead of floating badges above text. */
+ *  line div edge with a connecting line, instead of floating badges above text.
+ *  roleCueBubbles: Set of role IDs that have cue bubbles enabled */
 function annotateLine(
   plainText: string,
   cues: CueView[],
   selectedCommentRef: string | null,
   sideBubbleDir: "left" | "right" | null = null,
   effectiveCueTypes: Record<string, { color: string; bgColor: string; borderColor: string }> = CUE_TYPES,
+  roleCueBubbles: Set<string> = new Set(),
+  customCueTypeToRole: Record<string, string> = {},
 ): string {
   type Ann = { start: number; end: number; type: "cue" | "comment"; cue?: CueView; color?: string };
   const anns: Ann[] = [];
@@ -194,34 +209,97 @@ function annotateLine(
 
   anns.sort((a, b) => a.start - b.start);
 
+  // Group cue annotations by their exact position (same start and end)
+  const groupedByPos = new Map<string, Ann[]>();
+  for (const ann of anns) {
+    const key = `${ann.start}-${ann.end}`;
+    if (!groupedByPos.has(key)) groupedByPos.set(key, []);
+    groupedByPos.get(key)!.push(ann);
+  }
+
   let result = "";
   let pos = 0;
-  for (const ann of anns) {
-    if (ann.start > pos) result += escapeHtml(plainText.substring(pos, ann.start));
-    const segText = escapeHtml(plainText.substring(ann.start, ann.end));
-    if (ann.type === "cue" && ann.cue) {
-      const config = effectiveCueTypes[ann.cue.type] || CUE_TYPES[ann.cue.type];
-      if (sideBubbleDir) {
-        // Side-bubble mode: highlighted text gets underline + background.
-        // The bubble is positioned by a post-render effect that measures
-        // the highlight's position and places the bubble at a fixed spot
-        // in the margin, with a connecting line of the right length.
-        const bubbleLabel = escapeHtml(ann.cue.label);
-        // Highlighted text with underline — data attributes drive post-render positioning
-        result += `<span data-cue-highlight="${ann.cue.id}" data-bubble-dir="${sideBubbleDir}" data-bubble-color="${ann.color}" data-bubble-label="${bubbleLabel}" data-bubble-type="${ann.cue.type}" style="display:inline;background:${ann.color}15;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
-        result += segText;
-        result += `</span>`;
-      } else {
-        // Default top-badge mode
-        result += `<span style="position:relative;display:inline;background:${ann.color}20;border-bottom:2px solid ${ann.color};padding:1px 0;border-radius:2px;">`;
-        result += `<span contenteditable="false" style="position:absolute;top:-1.5em;left:0;font-family:DM Mono,monospace;font-size:9px;font-weight:700;color:${ann.color};background:${config?.bgColor || ann.color + '15'};border:1px solid ${config?.borderColor || ann.color + '30'};border-radius:3px;padding:0 4px;white-space:nowrap;pointer-events:auto;cursor:pointer;line-height:1.4;" data-cue-id="${ann.cue.id}">${escapeHtml(ann.cue.label)}</span>`;
+
+  // Get unique positions sorted by start
+  const sortedKeys = Array.from(groupedByPos.keys()).sort((a, b) => {
+    const [aStart] = a.split("-").map(Number);
+    const [bStart] = b.split("-").map(Number);
+    return aStart - bStart;
+  });
+
+  for (const key of sortedKeys) {
+    const group = groupedByPos.get(key)!;
+    const [start, end] = key.split("-").map(Number);
+
+    // Skip if this position overlaps with already-processed text
+    if (start < pos) continue;
+
+    if (start > pos) result += escapeHtml(plainText.substring(pos, start));
+    const segText = escapeHtml(plainText.substring(start, end));
+
+    // Separate cue annotations from comment annotations
+    const cueAnns = group.filter((a) => a.type === "cue" && a.cue);
+    const commentAnns = group.filter((a) => a.type === "comment");
+
+    if (cueAnns.length > 0) {
+      // Use the first cue's color for the underline (they all highlight the same text)
+      const primaryColor = cueAnns[0].color || "#888";
+
+      // When sideBubbleDir is set, show side bubbles only for cues whose associated role has bubbles enabled
+      const sideBubbleCues = sideBubbleDir ? cueAnns.filter((a) => {
+        if (!a.cue) return false;
+        // Check if the cue's associated role has bubbles enabled
+        const associatedRole = customCueTypeToRole[a.cue.type] || CUE_TYPE_TO_ROLE[a.cue.type];
+        return associatedRole ? roleCueBubbles.has(associatedRole) : false;
+      }) : [];
+      const topBadgeCues = cueAnns.filter((a) => !sideBubbleCues.includes(a));
+
+      if (sideBubbleCues.length > 0) {
+        // For multiple cues on the same text, create one visible highlight span
+        // with the text, and add marker spans for each cue that positionSideBubbles can find
+
+        // The first cue gets the actual highlight span with the text
+        const firstAnn = sideBubbleCues[0];
+        if (firstAnn.cue) {
+          const bubbleLabel = escapeHtml(firstAnn.cue.label);
+          result += `<span data-cue-highlight="${firstAnn.cue.id}" data-bubble-dir="${sideBubbleDir}" data-bubble-color="${firstAnn.color}" data-bubble-label="${bubbleLabel}" data-bubble-type="${firstAnn.cue.type}" style="display:inline;background:${primaryColor}15;border-bottom:2px solid ${primaryColor};padding:1px 0;border-radius:2px;">`;
+
+          // Add invisible marker spans for additional cues (positioned inline at start)
+          for (let i = 1; i < sideBubbleCues.length; i++) {
+            const ann = sideBubbleCues[i];
+            if (!ann.cue) continue;
+            const lbl = escapeHtml(ann.cue.label);
+            // Zero-width marker that inherits position from parent
+            result += `<span data-cue-highlight="${ann.cue.id}" data-bubble-dir="${sideBubbleDir}" data-bubble-color="${ann.color}" data-bubble-label="${lbl}" data-bubble-type="${ann.cue.type}" style="display:inline;"></span>`;
+          }
+
+          result += segText;
+          result += `</span>`;
+        }
+      }
+
+      // Handle top badge cues
+      if (topBadgeCues.length > 0 && sideBubbleCues.length === 0) {
+        const firstAnn = topBadgeCues[0];
+        const config = firstAnn.cue ? (effectiveCueTypes[firstAnn.cue.type] || CUE_TYPES[firstAnn.cue.type]) : null;
+        result += `<span style="position:relative;display:inline;background:${primaryColor}20;border-bottom:2px solid ${primaryColor};padding:1px 0;border-radius:2px;">`;
+
+        // Add badges for all cues, stacked
+        topBadgeCues.forEach((ann, idx) => {
+          if (!ann.cue) return;
+          const cfg = effectiveCueTypes[ann.cue.type] || CUE_TYPES[ann.cue.type];
+          const topOffset = -1.5 - (idx * 1.2);
+          result += `<span contenteditable="false" style="position:absolute;top:${topOffset}em;left:0;font-family:DM Mono,monospace;font-size:9px;font-weight:700;color:${ann.color};background:${cfg?.bgColor || ann.color + '15'};border:1px solid ${cfg?.borderColor || ann.color + '30'};border-radius:3px;padding:0 4px;white-space:nowrap;pointer-events:auto;cursor:pointer;line-height:1.4;" data-cue-id="${ann.cue.id}">${escapeHtml(ann.cue.label)}</span>`;
+        });
+
         result += segText;
         result += `</span>`;
       }
-    } else if (ann.type === "comment") {
+    } else if (commentAnns.length > 0) {
       result += `<span style="text-decoration:underline;text-decoration-color:#47B8E8;text-underline-offset:3px;text-decoration-thickness:2px;background:#47B8E810;border-radius:2px;padding:1px 0;">${segText}</span>`;
     }
-    pos = ann.end;
+
+    pos = end;
   }
   if (pos < plainText.length) result += escapeHtml(plainText.substring(pos));
 
@@ -238,19 +316,45 @@ function positionSideBubbles(container: HTMLElement, effectiveCueTypes: Record<s
   const highlights = container.querySelectorAll<HTMLElement>("span[data-cue-highlight][data-bubble-dir]");
   if (!highlights.length) return;
 
-  // Track occupied vertical ranges per line div to prevent overlap
-  const occupiedRanges = new Map<HTMLElement, Array<{ top: number; bottom: number }>>();
+  // Group highlights by their scriptRef (text they reference) and line div
+  // For nested marker spans (empty text), use the parent's text
+  const groupedByRef = new Map<string, { hl: HTMLElement; parentHl: HTMLElement | null }[]>();
 
   highlights.forEach((hl) => {
-    const dir = hl.getAttribute("data-bubble-dir") as "left" | "right";
-    const color = hl.getAttribute("data-bubble-color") || "#888";
-    const label = hl.getAttribute("data-bubble-label") || "";
-    const cueType = hl.getAttribute("data-bubble-type") || "";
-    const cueId = hl.getAttribute("data-cue-highlight") || "";
-    const config = effectiveCueTypes[cueType] || CUE_TYPES[cueType as keyof typeof CUE_TYPES];
+    let scriptRef = hl.textContent || "";
+    let parentHl: HTMLElement | null = null;
+
+    // If this span has no text content, it's a marker inside another highlight span
+    // Use the parent highlight span's text and position
+    if (!scriptRef && hl.parentElement?.hasAttribute("data-cue-highlight")) {
+      parentHl = hl.parentElement as HTMLElement;
+      scriptRef = parentHl.textContent || "";
+    }
 
     // Find the parent line <div> (direct child of container)
     let lineDiv = hl.parentElement;
+    while (lineDiv && lineDiv.parentElement !== container) {
+      lineDiv = lineDiv.parentElement;
+    }
+    if (!lineDiv) return;
+
+    // Create a unique key combining lineDiv and scriptRef
+    const key = `${Array.from(container.children).indexOf(lineDiv)}_${scriptRef}`;
+    if (!groupedByRef.has(key)) groupedByRef.set(key, []);
+    groupedByRef.get(key)!.push({ hl, parentHl });
+  });
+
+  // Process each group of highlights (bubbles referencing the same text)
+  groupedByRef.forEach((hlGroup) => {
+    if (hlGroup.length === 0) return;
+
+    // Use the first highlight (or its parent) for positioning reference
+    const firstEntry = hlGroup[0];
+    const positionRef = firstEntry.parentHl || firstEntry.hl;
+    const dir = firstEntry.hl.getAttribute("data-bubble-dir") as "left" | "right";
+
+    // Find the parent line <div>
+    let lineDiv = positionRef.parentElement;
     while (lineDiv && lineDiv.parentElement !== container) {
       lineDiv = lineDiv.parentElement;
     }
@@ -260,88 +364,114 @@ function positionSideBubbles(container: HTMLElement, effectiveCueTypes: Record<s
     lineDiv.style.position = "relative";
     lineDiv.style.overflow = "visible";
 
-    // Measure highlight position relative to line div
+    // Measure highlight position relative to line div (use the visible span)
     const lineDivRect = lineDiv.getBoundingClientRect();
-    const hlRect = hl.getBoundingClientRect();
-
-    // Create the bubble element
-    const bubble = document.createElement("span");
-    bubble.contentEditable = "false";
-    bubble.setAttribute("data-cue-id", cueId);
-    bubble.style.position = "absolute";
-    bubble.style.pointerEvents = "auto";
-    bubble.style.cursor = "pointer";
-    bubble.style.display = "flex";
-    bubble.style.alignItems = "flex-end";
-    bubble.style.whiteSpace = "nowrap";
-    bubble.style.zIndex = "2";
-
-    // Pill element
-    const pill = document.createElement("span");
-    pill.style.fontFamily = "DM Mono, monospace";
-    pill.style.fontSize = "20px";
-    pill.style.fontWeight = "700";
-    pill.style.color = color;
-    pill.style.background = config?.bgColor || color + "15";
-    pill.style.border = `1px solid ${config?.borderColor || color + "30"}`;
-    pill.style.borderRadius = "12px";
-    pill.style.padding = "2px 10px";
-    pill.style.whiteSpace = "nowrap";
-    pill.style.lineHeight = "1.3";
-    pill.textContent = label;
-
-    // Connecting line element
-    const line = document.createElement("span");
-    line.style.display = "inline-block";
-    line.style.height = "0";
-    line.style.borderTop = `2px solid ${color}`;
-    line.style.flexShrink = "0";
-
-    // Position vertically: align with the highlight text
-    const hlTop = hlRect.top - lineDivRect.top;
+    const hlRect = positionRef.getBoundingClientRect();
     const bubbleHeight = 30; // approximate pill height
+    const hlBottom = hlRect.bottom - lineDivRect.top;
+    const baseTop = hlBottom - bubbleHeight - 2;
 
-    // Check for overlap with existing bubbles on this line div
-    if (!occupiedRanges.has(lineDiv)) occupiedRanges.set(lineDiv, []);
-    const ranges = occupiedRanges.get(lineDiv)!;
-    let finalTop = hlTop;
-    // Shift down until no overlap
-    let attempts = 0;
-    while (attempts < 10) {
-      const overlaps = ranges.some(
-        (r) => finalTop < r.bottom && finalTop + bubbleHeight > r.top
-      );
-      if (!overlaps) break;
-      finalTop += bubbleHeight + 4; // 4px gap between stacked bubbles
-      attempts++;
-    }
-    ranges.push({ top: finalTop, bottom: finalTop + bubbleHeight });
+    // Create bubbles for each highlight in the group, stacking upward
+    hlGroup.forEach((entry, index) => {
+      const hl = entry.hl;
+      const color = hl.getAttribute("data-bubble-color") || "#888";
+      const label = hl.getAttribute("data-bubble-label") || "";
+      const cueType = hl.getAttribute("data-bubble-type") || "";
+      const cueId = hl.getAttribute("data-cue-highlight") || "";
+      const config = effectiveCueTypes[cueType] || CUE_TYPES[cueType as keyof typeof CUE_TYPES];
 
-    bubble.style.top = `${finalTop}px`;
+      // Create the bubble element
+      const bubble = document.createElement("span");
+      bubble.contentEditable = "false";
+      bubble.setAttribute("data-cue-id", cueId);
+      bubble.style.position = "absolute";
+      bubble.style.pointerEvents = "auto";
+      bubble.style.cursor = "pointer";
+      bubble.style.display = "flex";
+      bubble.style.alignItems = "flex-end";
+      bubble.style.whiteSpace = "nowrap";
+      bubble.style.zIndex = "2";
 
-    if (dir === "left") {
-      const hlLeft = hlRect.left - lineDivRect.left;
-      bubble.appendChild(pill);
-      bubble.appendChild(line);
-      lineDiv.appendChild(bubble);
-      const pillW = pill.getBoundingClientRect().width;
-      const bubbleX = -80;
-      bubble.style.right = "auto";
-      bubble.style.left = `${bubbleX - pillW / 2}px`;
-      const lineWidth = hlLeft - (bubbleX + pillW / 2);
-      line.style.width = `${Math.max(0, lineWidth)}px`;
-    } else {
-      const hlRight = hlRect.right - lineDivRect.left;
-      const lineDivWidth = lineDivRect.width;
-      bubble.appendChild(line);
-      bubble.appendChild(pill);
-      lineDiv.appendChild(bubble);
-      const pillW = pill.getBoundingClientRect().width;
-      const bubbleX = lineDivWidth + 80;
-      bubble.style.left = `${hlRight}px`;
-      const lineWidth = bubbleX - pillW / 2 - hlRight;
-      line.style.width = `${Math.max(0, lineWidth)}px`;
-    }
+      // Pill element
+      const pill = document.createElement("span");
+      pill.style.fontFamily = "DM Mono, monospace";
+      pill.style.fontSize = "20px";
+      pill.style.fontWeight = "700";
+      pill.style.color = color;
+      pill.style.background = config?.bgColor || color + "15";
+      pill.style.border = `1px solid ${config?.borderColor || color + "30"}`;
+      pill.style.borderRadius = "12px";
+      pill.style.padding = "2px 10px";
+      pill.style.whiteSpace = "nowrap";
+      pill.style.lineHeight = "1.3";
+      pill.textContent = label;
+
+      // Only the first (bottom) bubble gets a connecting line
+      const isBottomBubble = index === 0;
+
+      // Stack bubbles upward (subtract height for each additional bubble)
+      const finalTop = baseTop - (index * (bubbleHeight + 2));
+      bubble.style.top = `${finalTop}px`;
+
+      if (dir === "left") {
+        const hlLeft = hlRect.left - lineDivRect.left;
+
+        if (isBottomBubble) {
+          // Connecting line element (only for bottom bubble)
+          const line = document.createElement("span");
+          line.style.display = "inline-block";
+          line.style.height = "0";
+          line.style.borderTop = `2px solid ${color}`;
+          line.style.flexShrink = "0";
+          bubble.appendChild(pill);
+          bubble.appendChild(line);
+          lineDiv.appendChild(bubble);
+          const pillW = pill.getBoundingClientRect().width;
+          const bubbleX = -80;
+          bubble.style.right = "auto";
+          bubble.style.left = `${bubbleX - pillW / 2}px`;
+          const lineWidth = hlLeft - (bubbleX + pillW / 2);
+          line.style.width = `${Math.max(0, lineWidth)}px`;
+        } else {
+          // No line for stacked bubbles - just the pill
+          bubble.appendChild(pill);
+          lineDiv.appendChild(bubble);
+          const pillW = pill.getBoundingClientRect().width;
+          const bubbleX = -80;
+          bubble.style.right = "auto";
+          bubble.style.left = `${bubbleX - pillW / 2}px`;
+        }
+      } else {
+        const hlRight = hlRect.right - lineDivRect.left;
+        const lineDivWidth = lineDivRect.width;
+
+        if (isBottomBubble) {
+          // Connecting line element (only for bottom bubble)
+          const line = document.createElement("span");
+          line.style.display = "inline-block";
+          line.style.height = "0";
+          line.style.borderTop = `2px solid ${color}`;
+          line.style.flexShrink = "0";
+          bubble.appendChild(line);
+          bubble.appendChild(pill);
+          lineDiv.appendChild(bubble);
+          const pillW = pill.getBoundingClientRect().width;
+          const bubbleX = lineDivWidth + 80;
+          bubble.style.left = `${hlRight}px`;
+          const lineWidth = bubbleX - pillW / 2 - hlRight;
+          line.style.width = `${Math.max(0, lineWidth)}px`;
+        } else {
+          // No line for stacked bubbles - position pill at same x as bottom bubble
+          bubble.appendChild(pill);
+          lineDiv.appendChild(bubble);
+          const pillW = pill.getBoundingClientRect().width;
+          const lineDivWidth = lineDivRect.width;
+          const bubbleX = lineDivWidth + 80;
+          // Position at the same horizontal location as the bottom bubble's pill
+          bubble.style.left = `${bubbleX - pillW / 2}px`;
+        }
+      }
+    });
   });
 }
 
@@ -353,6 +483,8 @@ function textToDisplayHtml(
   selectedCommentRef: string | null,
   sideBubbleDir: "left" | "right" | null = null,
   effectiveCueTypes: Record<string, { color: string; bgColor: string; borderColor: string }> = CUE_TYPES,
+  roleCueBubbles: Set<string> = new Set(),
+  customCueTypeToRole: Record<string, string> = {},
 ): string {
   if (!text) return "<div><br></div>";
 
@@ -364,7 +496,7 @@ function textToDisplayHtml(
       if (!line) return "<div><br></div>";
 
       // Check for annotations on this line
-      const annotated = annotateLine(line, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes);
+      const annotated = annotateLine(line, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes, roleCueBubbles, customCueTypeToRole);
       const hasCueBadge = activeCues.some((c) => c.scriptRef && line.includes(c.scriptRef));
       // Top-badge mode needs padding-top; side-bubble mode needs overflow visible
       const padStyle = hasCueBadge
@@ -379,7 +511,7 @@ function textToDisplayHtml(
           const c = escapeHtml(charPrefix);
           // Re-annotate only the dialogue portion after the prefix
           const dialoguePart = line.substring(charPrefix.length);
-          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes);
+          const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes, roleCueBubbles, customCueTypeToRole);
           const dialogueHtml = dialogueAnnotated || escapeHtml(dialoguePart);
           return `<div data-character="${c}"${padStyle}><span style="${CHAR_NAME_STYLE}">${c}</span>${dialogueHtml}</div>`;
         }
@@ -612,18 +744,38 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     isCommentPanelOpen,
     toggleCommentPanel,
     cuePanelSide,
+    hiddenCueTypes,
+    customRoles,
   } = useStageStore();
+
+  // Use selector with array conversion for proper reactivity with Set
+  const roleCueBubblesArray = useStageStore((s) => [...s.roleCueBubbles]);
+  const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
 
   const projectId = projectIdProp || storeProjectId;
   const containerRef = useRef<HTMLDivElement>(null);
-  const roleConfig = ROLES[activeRole];
+
+  // Get role config - check built-in roles first, then custom roles
+  const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      return {
+        id: customRole.id,
+        label: customRole.name,
+        icon: customRole.icon,
+        color: customRole.color,
+        visibleCueTypes: customRole.visibleCueTypes,
+        showAllDialogue: true,
+        showStageDirections: true,
+        hasCuePanel: true,
+      };
+    }
+    return ROLES.STAGE_MANAGER; // fallback
+  })();
   const isMobile = useIsMobile();
 
-  // Side-bubble cue overlay for Lighting, Sound, Stage Manager
-  const SIDE_BUBBLE_ROLES = ["LIGHTING", "SOUND", "STAGE_MANAGER"];
-  const sideBubbleDir: "left" | "right" | null = SIDE_BUBBLE_ROLES.includes(activeRole)
-    ? (cuePanelSide === "left" ? "left" : "right")
-    : null;
+  // Side-bubble cue overlay direction - always enabled, filtering happens per-cue based on role settings
+  const sideBubbleDir: "left" | "right" = cuePanelSide === "left" ? "left" : "right";
 
   // Scene editor refs for character insertion + live sync
   const sceneEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1122,9 +1274,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
           ? "0 8px 80px"
           : sideBubbleDir === "left"
             ? "0 32px 80px 160px"
-            : sideBubbleDir === "right"
-              ? "0 160px 80px 32px"
-              : "0 32px 80px",
+            : "0 160px 80px 32px",
       }}
     >
       {/* Panel toggle buttons at top of script area */}
@@ -1530,6 +1680,42 @@ function SceneTextBox({
   const addComment = useStageStore((s) => s.addComment);
   const cueTypeColorOverrides = useStageStore((s) => s.cueTypeColorOverrides);
   const cueTypeColorOverridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
+  const hiddenCueTypes = useStageStore((s) => s.hiddenCueTypes);
+  const customRoles = useStageStore((s) => s.customRoles);
+  const customCueTypes = useStageStore((s) => s.customCueTypes);
+  // Use selector with array conversion for proper reactivity with Set
+  const roleCueBubblesArray = useStageStore((s) => [...s.roleCueBubbles]);
+  const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
+
+  // Build mapping from custom cue types to their associated roles
+  const customCueTypeToRole = useMemo(() => {
+    const mapping: Record<string, string> = {};
+    for (const ct of customCueTypes) {
+      if (ct.associatedRole) {
+        mapping[ct.type] = ct.associatedRole;
+      }
+    }
+    return mapping;
+  }, [customCueTypes]);
+
+  // Get role config - check built-in roles first, then custom roles
+  const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      return {
+        id: customRole.id,
+        label: customRole.name,
+        icon: customRole.icon,
+        color: customRole.color,
+        visibleCueTypes: customRole.visibleCueTypes,
+        showAllDialogue: true,
+        showStageDirections: true,
+        hasCuePanel: true,
+      };
+    }
+    return ROLES.STAGE_MANAGER; // fallback
+  })();
+
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
     return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
@@ -1539,9 +1725,11 @@ function SceneTextBox({
   const cueButtonLabel = useMemo(() => {
     if (activeRole === "SET_DESIGN") return "+ Set";
     if (activeRole === "PROPS") return "+ Prop";
-    const canCue = ["STAGE_MANAGER", "DIRECTOR", "ACTOR", "LIGHTING", "SOUND", "SET_DESIGN", "PROPS"].includes(activeRole);
-    return canCue ? "+ Cue" : null;
-  }, [activeRole]);
+    const builtInCanCue = ["STAGE_MANAGER", "DIRECTOR", "ACTOR", "LIGHTING", "SOUND", "SET_DESIGN", "PROPS"].includes(activeRole);
+    // Custom roles with hasCuePanel can also add cues
+    const isCustomWithCuePanel = !builtInCanCue && roleConfig.hasCuePanel;
+    return (builtInCanCue || isCustomWithCuePanel) ? "+ Cue" : null;
+  }, [activeRole, roleConfig.hasCuePanel]);
   const canComment = activeRole !== "VIEWER";
 
   // Track text selection inside editor
@@ -1672,10 +1860,17 @@ function SceneTextBox({
 
     for (const m of matches) {
       const { node: textNode, start, end } = m;
-      const before = textNode.textContent!.substring(0, start);
-      const matched = textNode.textContent!.substring(start, end);
-      const after = textNode.textContent!.substring(end);
-      const parent = textNode.parentNode!;
+      // Skip if node is no longer in the document (DOM may have been modified)
+      if (!textNode.parentNode || !editor.contains(textNode)) continue;
+
+      const currentText = textNode.textContent || "";
+      // Verify the match still exists at expected position
+      if (currentText.substring(start, end) !== selectedCommentRef) continue;
+
+      const before = currentText.substring(0, start);
+      const matched = currentText.substring(start, end);
+      const after = currentText.substring(end);
+      const parent = textNode.parentNode;
 
       const mark = document.createElement("mark");
       mark.setAttribute("data-comment-highlight", "true");
@@ -1704,7 +1899,6 @@ function SceneTextBox({
   const [displayHtml, setDisplayHtml] = useState(fallbackHtml);
   // Raw text for annotation overlay (cues + comment underlines)
   const [rawText, setRawText] = useState("");
-  const roleConfig = ROLES[activeRole as keyof typeof ROLES];
 
   // All cues in this scene
   const sceneCues = useMemo(
@@ -1717,13 +1911,17 @@ function SceneTextBox({
     if (!rawText && !sceneCues.length && !selectedCommentRef) return displayHtml;
     const text = rawText || "";
     if (!text) return displayHtml;
-    const visibleTypes = (roleConfig?.visibleCueTypes || []) as CueType[];
+    const allVisibleTypes = (roleConfig?.visibleCueTypes || []) as CueType[];
+    // For Stage Manager, filter out user-hidden cue types
+    const visibleTypes = activeRole === "STAGE_MANAGER"
+      ? allVisibleTypes.filter((t) => !hiddenCueTypes.has(t))
+      : allVisibleTypes;
     const hasAnnotations =
       sceneCues.some((c) => c.scriptRef && visibleTypes.includes(c.type) && text.includes(c.scriptRef)) ||
       (selectedCommentRef && text.includes(selectedCommentRef));
     if (!hasAnnotations) return displayHtml;
-    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir, effCueTypes);
-  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir, effCueTypes]);
+    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir, effCueTypes, roleCueBubbles, customCueTypeToRole);
+  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir, effCueTypes, activeRole, hiddenCueTypes, roleCueBubbles, customCueTypeToRole]);
 
   // Get Y.Text for this scene
   const yText = useMemo(

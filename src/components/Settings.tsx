@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { signOut } from "next-auth/react";
 import { useStageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
@@ -57,6 +57,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     cueTypeColorOverrides,
     cueTypeColorOverridesLight,
     setCueTypeColorOverride,
+    roleOrder,
+    setRoleOrder,
   } = useStageStore();
 
   const { theme, toggleTheme } = useTheme();
@@ -709,6 +711,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
                   </div>
                 </div>
               </div>
+
             </div>
           )}
 
@@ -907,227 +910,35 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
 
           {/* ===== ROLES TAB ===== */}
           {activeTab === "roles" && isAdmin && (
-            <div className="space-y-4">
-              <p
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 15,
-                  color: "var(--stage-text)",
-                }}
-              >
-                Manage roles for this project.
-              </p>
-
-              {/* Built-in roles */}
-              <div>
-                <div
-                  className="mb-2"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 13,
-                    color: "var(--stage-text)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Built-in Roles
-                </div>
-                <div className="space-y-1.5">
-                  {ROLE_LIST.map((role) => {
-                    const lightAlt: Record<string, string> = {
-                      ACTOR: "#3D5A80",
-                      DIRECTOR: "#555555",
-                      LIGHTING: "#8B6B14",
-                      WRITER: "#6B6B1A",
-                      VIEWER: "#666666",
-                    };
-                    const textColor = theme === "light" && lightAlt[role.id] ? lightAlt[role.id] : role.color;
-                    return (
-                    <div
-                      key={role.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg"
-                      style={{
-                        background: "var(--stage-line-hover)",
-                        border: "1px solid var(--stage-border)",
-                      }}
-                    >
-                      <span style={{ fontSize: 16, color: textColor }}>
-                        {role.icon}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: "DM Mono, monospace",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: textColor,
-                        }}
-                      >
-                        {role.label}
-                      </span>
-                      <span
-                        className="ml-auto"
-                        style={{
-                          fontFamily: "DM Mono, monospace",
-                          fontSize: 11,
-                          color: "var(--stage-text)",
-                          border: "1px solid var(--stage-border-subtle)",
-                          borderRadius: 4,
-                          padding: "1px 5px",
-                        }}
-                      >
-                        built-in
-                      </span>
-                    </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Custom roles section */}
-              <div>
-                <div
-                  className="mb-2"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 13,
-                    color: "var(--stage-text)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Custom Roles
-                </div>
-
-              {roleError && (
-                <div
-                  className="px-3 py-2 rounded text-sm"
-                  style={{
-                    background: "rgba(232, 120, 71, 0.1)",
-                    border: "1px solid rgba(232, 120, 71, 0.3)",
-                    color: "var(--stage-danger)",
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 12,
-                  }}
-                >
-                  {roleError}
-                </div>
-              )}
-
-              {/* Existing custom roles */}
-              {customRoles.length > 0 && (
-                <div className="space-y-2">
-                  {customRoles.map((role) =>
-                    editingRoleId === role.id ? (
-                      <RoleEditForm
-                        key={role.id}
-                        name={editRoleName}
-                        icon={editRoleIcon}
-                        color={editRoleColor}
-                        saving={roleSaving}
-                        onNameChange={setEditRoleName}
-                        onIconChange={setEditRoleIcon}
-                        onColorChange={setEditRoleColor}
-                        onSave={handleUpdateRole}
-                        onCancel={() => { setEditingRoleId(null); setRoleError(null); }}
-                      />
-                    ) : (
-                      <div
-                        key={role.id}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg group"
-                        style={{
-                          background: "var(--stage-line-hover)",
-                          border: "1px solid var(--stage-border)",
-                        }}
-                      >
-                        <span style={{ fontSize: 16, color: role.color }}>
-                          {role.icon}
-                        </span>
-                        <span
-                          className="flex-1"
-                          style={{
-                            fontFamily: "DM Mono, monospace",
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: role.color,
-                          }}
-                        >
-                          {role.name}
-                        </span>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => startEditRole(role)}
-                            className="px-2 py-1 rounded hover:bg-white/5"
-                            style={{
-                              fontFamily: "DM Mono, monospace",
-                              fontSize: 13,
-                              color: "var(--stage-text)",
-                              border: "1px solid var(--stage-border-subtle)",
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRole(role.id)}
-                            className="px-2 py-1 rounded hover:bg-red-500/10"
-                            style={{
-                              fontFamily: "DM Mono, monospace",
-                              fontSize: 13,
-                              color: "var(--stage-error)",
-                              border: "1px solid #E8474740",
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-
-              {customRoles.length === 0 && !showAddRole && (
-                <div
-                  className="text-center py-6"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 14,
-                    color: "var(--stage-text)",
-                  }}
-                >
-                  No custom roles yet
-                </div>
-              )}
-
-              {/* Add role form */}
-              {showAddRole ? (
-                <RoleEditForm
-                  name={newRoleName}
-                  icon={newRoleIcon}
-                  color={newRoleColor}
-                  saving={roleSaving}
-                  onNameChange={setNewRoleName}
-                  onIconChange={setNewRoleIcon}
-                  onColorChange={setNewRoleColor}
-                  onSave={handleAddRole}
-                  onCancel={() => { setShowAddRole(false); setRoleError(null); }}
-                  saveLabel="Add Role"
-                />
-              ) : (
-                <button
-                  onClick={() => setShowAddRole(true)}
-                  className="w-full px-4 py-2.5 rounded-lg transition-colors hover:bg-white/3"
-                  style={{
-                    fontFamily: "DM Mono, monospace",
-                    fontSize: 14,
-                    color: "var(--stage-text)",
-                    border: "1px dashed var(--stage-border-subtle)",
-                  }}
-                >
-                  + Add Custom Role
-                </button>
-              )}
-              </div>
-            </div>
+            <RolesTabContent
+              theme={theme}
+              customRoles={customRoles}
+              roleOrder={roleOrder}
+              setRoleOrder={setRoleOrder}
+              roleError={roleError}
+              setRoleError={setRoleError}
+              editingRoleId={editingRoleId}
+              setEditingRoleId={setEditingRoleId}
+              editRoleName={editRoleName}
+              editRoleIcon={editRoleIcon}
+              editRoleColor={editRoleColor}
+              setEditRoleName={setEditRoleName}
+              setEditRoleIcon={setEditRoleIcon}
+              setEditRoleColor={setEditRoleColor}
+              roleSaving={roleSaving}
+              handleUpdateRole={handleUpdateRole}
+              handleDeleteRole={handleDeleteRole}
+              startEditRole={startEditRole}
+              showAddRole={showAddRole}
+              setShowAddRole={setShowAddRole}
+              newRoleName={newRoleName}
+              newRoleIcon={newRoleIcon}
+              newRoleColor={newRoleColor}
+              setNewRoleName={setNewRoleName}
+              setNewRoleIcon={setNewRoleIcon}
+              setNewRoleColor={setNewRoleColor}
+              handleAddRole={handleAddRole}
+            />
           )}
 
           {/* ===== CUE TYPES TAB ===== */}
@@ -1896,6 +1707,384 @@ function CueTypeEditForm({
         >
           {saving ? "Saving..." : saveLabel}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---- Roles Tab Content with Drag-and-Drop Ordering ----
+
+function RolesTabContent({
+  theme,
+  customRoles,
+  roleOrder,
+  setRoleOrder,
+  roleError,
+  setRoleError,
+  editingRoleId,
+  setEditingRoleId,
+  editRoleName,
+  editRoleIcon,
+  editRoleColor,
+  setEditRoleName,
+  setEditRoleIcon,
+  setEditRoleColor,
+  roleSaving,
+  handleUpdateRole,
+  handleDeleteRole,
+  startEditRole,
+  showAddRole,
+  setShowAddRole,
+  newRoleName,
+  newRoleIcon,
+  newRoleColor,
+  setNewRoleName,
+  setNewRoleIcon,
+  setNewRoleColor,
+  handleAddRole,
+}: {
+  theme: "dark" | "light";
+  customRoles: CustomRoleView[];
+  roleOrder: string[];
+  setRoleOrder: (order: string[]) => void;
+  roleError: string | null;
+  setRoleError: (err: string | null) => void;
+  editingRoleId: string | null;
+  setEditingRoleId: (id: string | null) => void;
+  editRoleName: string;
+  editRoleIcon: string;
+  editRoleColor: string;
+  setEditRoleName: (v: string) => void;
+  setEditRoleIcon: (v: string) => void;
+  setEditRoleColor: (v: string) => void;
+  roleSaving: boolean;
+  handleUpdateRole: () => void;
+  handleDeleteRole: (id: string) => void;
+  startEditRole: (role: CustomRoleView) => void;
+  showAddRole: boolean;
+  setShowAddRole: (v: boolean) => void;
+  newRoleName: string;
+  newRoleIcon: string;
+  newRoleColor: string;
+  setNewRoleName: (v: string) => void;
+  setNewRoleIcon: (v: string) => void;
+  setNewRoleColor: (v: string) => void;
+  handleAddRole: () => void;
+}) {
+  // Cue bubble settings from store
+  const roleCueBubbles = useStageStore((s) => s.roleCueBubbles);
+  const toggleRoleCueBubbles = useStageStore((s) => s.toggleRoleCueBubbles);
+
+  // Light theme color overrides for built-in roles
+  const lightAlt: Record<string, string> = {
+    ACTOR: "#3D5A80",
+    DIRECTOR: "#555555",
+    LIGHTING: "#8B6B14",
+    WRITER: "#6B6B1A",
+    VIEWER: "#666666",
+  };
+
+  // Combine built-in roles with custom roles
+  const allRoles = useMemo(() => {
+    const builtIn = ROLE_LIST.map((r) => ({
+      id: r.id,
+      label: r.label,
+      icon: r.icon,
+      color: r.color,
+      isBuiltIn: true,
+    }));
+    const custom = customRoles.map((r) => ({
+      id: r.id,
+      label: r.name,
+      icon: r.icon,
+      color: r.color,
+      isBuiltIn: false,
+    }));
+    return [...builtIn, ...custom];
+  }, [customRoles]);
+
+  // Sort roles by roleOrder (roles not in order go to the end in their original order)
+  const sortedRoles = useMemo(() => {
+    if (roleOrder.length === 0) return allRoles;
+    const orderMap = new Map(roleOrder.map((id, idx) => [id, idx]));
+    return [...allRoles].sort((a, b) => {
+      const aIdx = orderMap.get(a.id) ?? Infinity;
+      const bIdx = orderMap.get(b.id) ?? Infinity;
+      if (aIdx === Infinity && bIdx === Infinity) {
+        return allRoles.indexOf(a) - allRoles.indexOf(b);
+      }
+      return aIdx - bIdx;
+    });
+  }, [allRoles, roleOrder]);
+
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent, roleId: string) => {
+    setDraggedId(roleId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", roleId);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, roleId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (roleId !== draggedId) {
+      setDragOverId(roleId);
+    }
+  }, [draggedId]);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverId(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    const currentOrder = sortedRoles.map((r) => r.id);
+    const draggedIdx = currentOrder.indexOf(draggedId);
+    const targetIdx = currentOrder.indexOf(targetId);
+
+    if (draggedIdx === -1 || targetIdx === -1) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    const newOrder = [...currentOrder];
+    newOrder.splice(draggedIdx, 1);
+    newOrder.splice(targetIdx, 0, draggedId);
+
+    setRoleOrder(newOrder);
+    setDraggedId(null);
+    setDragOverId(null);
+  }, [draggedId, sortedRoles, setRoleOrder]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setRoleOrder([]);
+  }, [setRoleOrder]);
+
+  // Get color for a role (with theme consideration)
+  const getRoleColor = (role: { id: string; color: string; isBuiltIn: boolean }) => {
+    if (role.isBuiltIn && theme === "light" && lightAlt[role.id]) {
+      return lightAlt[role.id];
+    }
+    return role.color;
+  };
+
+  return (
+    <div className="space-y-4">
+      <p
+        style={{
+          fontFamily: "DM Mono, monospace",
+          fontSize: 15,
+          color: "var(--stage-text)",
+        }}
+      >
+        Manage and reorder roles. Drag to change the order in the View As bar.
+      </p>
+
+      {roleError && (
+        <div
+          className="px-3 py-2 rounded text-sm"
+          style={{
+            background: "rgba(232, 120, 71, 0.1)",
+            border: "1px solid rgba(232, 120, 71, 0.3)",
+            color: "var(--stage-danger)",
+            fontFamily: "DM Mono, monospace",
+            fontSize: 12,
+          }}
+        >
+          {roleError}
+        </div>
+      )}
+
+      {/* All roles - draggable */}
+      <div className="space-y-1.5">
+        {sortedRoles.map((role) => {
+          const textColor = getRoleColor(role);
+          const customRole = !role.isBuiltIn ? customRoles.find((r) => r.id === role.id) : null;
+          const isEditing = editingRoleId === role.id;
+
+          if (isEditing && customRole) {
+            return (
+              <RoleEditForm
+                key={role.id}
+                name={editRoleName}
+                icon={editRoleIcon}
+                color={editRoleColor}
+                saving={roleSaving}
+                onNameChange={setEditRoleName}
+                onIconChange={setEditRoleIcon}
+                onColorChange={setEditRoleColor}
+                onSave={handleUpdateRole}
+                onCancel={() => { setEditingRoleId(null); setRoleError(null); }}
+              />
+            );
+          }
+
+          return (
+            <div
+              key={role.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, role.id)}
+              onDragOver={(e) => handleDragOver(e, role.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, role.id)}
+              onDragEnd={handleDragEnd}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all group"
+              style={{
+                background: dragOverId === role.id
+                  ? "var(--stage-gold-bg)"
+                  : draggedId === role.id
+                  ? "var(--stage-hover)"
+                  : "var(--stage-line-hover)",
+                border: dragOverId === role.id
+                  ? "1px solid var(--stage-gold-border)"
+                  : "1px solid var(--stage-border)",
+                opacity: draggedId === role.id ? 0.5 : 1,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 12,
+                  color: "var(--stage-muted)",
+                  cursor: "grab",
+                }}
+              >
+                ⋮⋮
+              </span>
+              <span style={{ fontSize: 16, color: textColor }}>
+                {role.icon}
+              </span>
+              <span
+                className="flex-1"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: textColor,
+                }}
+              >
+                {role.label}
+              </span>
+              {/* Cue bubble toggle */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleRoleCueBubbles(role.id); }}
+                className="px-2 py-1 rounded transition-all"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  fontSize: 11,
+                  color: roleCueBubbles.has(role.id) ? "var(--stage-gold)" : "var(--stage-muted)",
+                  background: roleCueBubbles.has(role.id) ? "var(--stage-gold-bg)" : "transparent",
+                  border: `1px solid ${roleCueBubbles.has(role.id) ? "var(--stage-gold-border)" : "var(--stage-border-subtle)"}`,
+                }}
+                title={roleCueBubbles.has(role.id) ? "Cue bubbles enabled" : "Cue bubbles disabled"}
+              >
+                {roleCueBubbles.has(role.id) ? "◉ Bubbles" : "○ Bubbles"}
+              </button>
+              {role.isBuiltIn ? (
+                <span
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 11,
+                    color: "var(--stage-muted)",
+                    border: "1px solid var(--stage-border-subtle)",
+                    borderRadius: 4,
+                    padding: "1px 5px",
+                  }}
+                >
+                  built-in
+                </span>
+              ) : (
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (customRole) startEditRole(customRole); }}
+                    className="px-2 py-1 rounded hover:bg-white/5"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      color: "var(--stage-text)",
+                      border: "1px solid var(--stage-border-subtle)",
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.id); }}
+                    className="px-2 py-1 rounded hover:bg-red-500/10"
+                    style={{
+                      fontFamily: "DM Mono, monospace",
+                      fontSize: 13,
+                      color: "var(--stage-error)",
+                      border: "1px solid #E8474740",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reset order button */}
+      {roleOrder.length > 0 && (
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 rounded transition-colors hover:bg-white/5"
+          style={{
+            fontFamily: "DM Mono, monospace",
+            fontSize: 13,
+            color: "var(--stage-muted)",
+            border: "1px solid var(--stage-border-subtle)",
+          }}
+        >
+          Reset to Default Order
+        </button>
+      )}
+
+      {/* Add role form */}
+      <div className="pt-2">
+        {showAddRole ? (
+          <RoleEditForm
+            name={newRoleName}
+            icon={newRoleIcon}
+            color={newRoleColor}
+            saving={roleSaving}
+            onNameChange={setNewRoleName}
+            onIconChange={setNewRoleIcon}
+            onColorChange={setNewRoleColor}
+            onSave={handleAddRole}
+            onCancel={() => { setShowAddRole(false); setRoleError(null); }}
+            saveLabel="Add Role"
+          />
+        ) : (
+          <button
+            onClick={() => setShowAddRole(true)}
+            className="w-full px-4 py-2.5 rounded-lg transition-colors hover:bg-white/3"
+            style={{
+              fontFamily: "DM Mono, monospace",
+              fontSize: 14,
+              color: "var(--stage-text)",
+              border: "1px dashed var(--stage-border-subtle)",
+            }}
+          >
+            + Add Custom Role
+          </button>
+        )}
       </div>
     </div>
   );

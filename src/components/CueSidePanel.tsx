@@ -22,9 +22,27 @@ export function CueSidePanel() {
     openCueEditor,
     cueTypeColorOverrides,
     cueTypeColorOverridesLight,
+    hiddenCueTypes,
+    customRoles,
   } = useStageStore();
 
-  const roleConfig = ROLES[activeRole];
+  // Get role config - check built-in roles first, then custom roles
+  const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      return {
+        id: customRole.id,
+        label: customRole.name,
+        icon: customRole.icon,
+        color: customRole.color,
+        visibleCueTypes: customRole.visibleCueTypes,
+        showAllDialogue: true,
+        showStageDirections: true,
+        hasCuePanel: true,
+      };
+    }
+    return ROLES.STAGE_MANAGER; // fallback
+  })();
   const isMobile = useIsMobile();
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
@@ -41,10 +59,15 @@ export function CueSidePanel() {
   const cues = useMemo(() => {
     const result: (CueView & { sceneName: string })[] = [];
 
+    // For Stage Manager, filter out user-hidden cue types
+    const effectiveVisibleTypes = activeRole === "STAGE_MANAGER"
+      ? roleConfig.visibleCueTypes.filter((t) => !hiddenCueTypes.has(t))
+      : roleConfig.visibleCueTypes;
+
     scenes.forEach((scene) => {
       scene.lines.forEach((line) => {
         line.cues
-          .filter((c) => roleConfig.visibleCueTypes.includes(c.type))
+          .filter((c) => effectiveVisibleTypes.includes(c.type))
           .forEach((cue) => {
             result.push({
               ...cue,
@@ -55,7 +78,7 @@ export function CueSidePanel() {
     });
 
     // Sort by type first (preserve visibleCueTypes order), then by cue number within each type
-    const typeOrder = roleConfig.visibleCueTypes;
+    const typeOrder = effectiveVisibleTypes;
     result.sort((a, b) => {
       const typeA = typeOrder.indexOf(a.type);
       const typeB = typeOrder.indexOf(b.type);
@@ -64,7 +87,7 @@ export function CueSidePanel() {
     });
 
     return result;
-  }, [scenes, roleConfig]);
+  }, [scenes, roleConfig, activeRole, hiddenCueTypes]);
 
   const handleCueClick = (cue: CueView) => {
     setExpandedCueId(expandedCueId === cue.id ? null : cue.id);
@@ -373,7 +396,7 @@ export function CueSidePanel() {
                 <span
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 1.3),
+                    fontSize: Math.round(scriptTextSize * 0.85),
                     fontWeight: 700,
                     color: cueConfig.color,
                     letterSpacing: "0.03em",
@@ -385,7 +408,7 @@ export function CueSidePanel() {
                   className="px-1.5 py-0.5 rounded"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 0.9),
+                    fontSize: Math.round(scriptTextSize * 0.55),
                     color: statusColor,
                     background: statusColor + "15",
                     border: `1px solid ${statusColor}30`,
@@ -400,7 +423,7 @@ export function CueSidePanel() {
                 <div
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 1.2),
+                    fontSize: Math.round(scriptTextSize * 0.75),
                     color: isVisible ? "#a09888" : "var(--stage-faint)",
                     lineHeight: 1.5,
                     overflow: "hidden",
@@ -581,7 +604,7 @@ export function CueSidePanel() {
                   className="mt-1"
                   style={{
                     fontFamily: "DM Mono, monospace",
-                    fontSize: Math.round(scriptTextSize * 1.0),
+                    fontSize: Math.round(scriptTextSize * 0.6),
                     color: "var(--stage-ultra-faint)",
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
@@ -602,7 +625,7 @@ export function CueSidePanel() {
             onDrop={(e) => handleDrop(e, "@@end")}
             style={{
               minHeight: 48,
-              borderTop: dragOverId === "@@end" ? `2px solid ${ROLES[activeRole].color}` : "2px solid transparent",
+              borderTop: dragOverId === "@@end" ? `2px solid ${roleConfig.color}` : "2px solid transparent",
               transition: "border-color 0.15s ease",
             }}
           />

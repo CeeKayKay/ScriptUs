@@ -12,17 +12,32 @@ interface CueEditorProps {
 }
 
 export function CueEditor({ projectId, broadcast }: CueEditorProps) {
-  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore, cueTypeColorOverrides, cueTypeColorOverridesLight } = useStageStore();
+  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore, cueTypeColorOverrides, cueTypeColorOverridesLight, customRoles, customCueTypes } = useStageStore();
   const isEditing = !!editingCue;
   const isMobile = useIsMobile();
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
-    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
-  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
+    const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+    // Merge in custom cue types
+    const merged: Record<string, { type: string; label: string; color: string; bgColor: string; borderColor: string; associatedRole: string }> = { ...builtIn };
+    customCueTypes.forEach((ct) => {
+      merged[ct.type] = {
+        type: ct.type,
+        label: ct.label,
+        color: ct.color,
+        bgColor: ct.bgColor,
+        borderColor: ct.borderColor,
+        associatedRole: ct.associatedRole,
+      };
+    });
+    return merged;
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight, customCueTypes]);
 
   // Auto-select cue type based on active role
   const defaultType = (): CueType => {
     if (editingCue) return editingCue.type;
+
+    // Built-in role mappings
     const roleToType: Partial<Record<string, CueType>> = {
       LIGHTING: "LIGHT",
       SOUND: "SOUND",
@@ -32,7 +47,30 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
       DIRECTOR: "BLOCKING",
       STAGE_MANAGER: "LIGHT",
     };
-    return roleToType[activeRole] || "LIGHT";
+
+    // Check if it's a built-in role
+    if (roleToType[activeRole]) {
+      return roleToType[activeRole]!;
+    }
+
+    // Check if it's a custom role
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      // First, check if there's a custom cue type associated with this custom role
+      const associatedCustomCueType = customCueTypes.find(
+        (ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name
+      );
+      if (associatedCustomCueType) {
+        return associatedCustomCueType.type as CueType;
+      }
+
+      // Otherwise, use the first visible cue type for this role
+      if (customRole.visibleCueTypes && customRole.visibleCueTypes.length > 0) {
+        return customRole.visibleCueTypes[0] as CueType;
+      }
+    }
+
+    return "LIGHT";
   };
 
   // Auto-calculate next cue number for a given type

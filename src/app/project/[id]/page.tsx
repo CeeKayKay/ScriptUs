@@ -38,6 +38,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     cuePanelSide,
     setOnlineUsers,
     setRemoteCursors,
+    customRoles,
   } = useStageStore();
 
   const isMobile = useIsMobile();
@@ -132,7 +133,23 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
     );
   }
 
-  const roleConfig = ROLES[activeRole];
+  // Get role config - check built-in roles first, then custom roles
+  const roleConfig = ROLES[activeRole as ProjectRole] || (() => {
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      return {
+        id: customRole.id,
+        label: customRole.name,
+        icon: customRole.icon,
+        color: customRole.color,
+        visibleCueTypes: customRole.visibleCueTypes,
+        showAllDialogue: true,
+        showStageDirections: true,
+        hasCuePanel: true,
+      };
+    }
+    return ROLES.STAGE_MANAGER; // fallback
+  })();
   const showSidePanel = roleConfig.hasCuePanel && isCuePanelOpen;
   const isWriter = activeRole === "WRITER";
   const SidePanel = isWriter ? WriterSidePanel : CueSidePanel;

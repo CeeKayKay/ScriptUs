@@ -4,9 +4,9 @@ import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberVi
 type CuePanelSide = "left" | "right";
 
 interface StageStore {
-  // Current user context
-  activeRole: ProjectRole;
-  setActiveRole: (role: ProjectRole) => void;
+  // Current user context (can be built-in ProjectRole or custom role ID)
+  activeRole: string;
+  setActiveRole: (role: string) => void;
 
   // Project data
   projectId: string | null;
@@ -137,6 +137,20 @@ interface StageStore {
       field: "text" | "character" | "title" | null;
     }>
   ) => void;
+
+  // Stage Manager cue type visibility toggles
+  hiddenCueTypes: Set<string>;
+  toggleCueTypeVisibility: (cueType: string) => void;
+  isCueTypeVisible: (cueType: string) => boolean;
+
+  // Role ordering for "View as" bar
+  roleOrder: string[];
+  setRoleOrder: (order: string[]) => void;
+
+  // Per-role cue bubble visibility (which roles show cue bubbles)
+  roleCueBubbles: Set<string>;
+  toggleRoleCueBubbles: (roleId: string) => void;
+  hasRoleCueBubbles: (roleId: string) => boolean;
 }
 
 // Read persisted cue panel side from localStorage
@@ -161,13 +175,41 @@ function getPersistedCuePanelSide(): CuePanelSide {
   return "right";
 }
 
-function getPersistedActiveRole(): ProjectRole {
+function getPersistedActiveRole(): string {
   if (typeof window === "undefined") return "STAGE_MANAGER";
   try {
     const saved = localStorage.getItem("scriptus-active-role");
-    if (saved) return saved as ProjectRole;
+    if (saved) return saved;
   } catch {}
   return "STAGE_MANAGER";
+}
+
+function getPersistedHiddenCueTypes(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const saved = localStorage.getItem("scriptus-hidden-cue-types");
+    if (saved) return new Set(JSON.parse(saved));
+  } catch {}
+  return new Set();
+}
+
+function getPersistedRoleOrder(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem("scriptus-role-order");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return [];
+}
+
+function getPersistedRoleCueBubbles(): Set<string> {
+  if (typeof window === "undefined") return new Set(["STAGE_MANAGER", "LIGHTING", "SOUND"]);
+  try {
+    const saved = localStorage.getItem("scriptus-role-cue-bubbles");
+    if (saved) return new Set(JSON.parse(saved));
+  } catch {}
+  // Default: Stage Manager, Lighting, and Sound show cue bubbles
+  return new Set(["STAGE_MANAGER", "LIGHTING", "SOUND"]);
 }
 
 export const useStageStore = create<StageStore>((set) => ({
@@ -421,4 +463,54 @@ export const useStageStore = create<StageStore>((set) => ({
 
   remoteCursors: [],
   setRemoteCursors: (cursors) => set({ remoteCursors: cursors }),
+
+  // Stage Manager cue type visibility toggles
+  hiddenCueTypes: getPersistedHiddenCueTypes(),
+  toggleCueTypeVisibility: (cueType) =>
+    set((s) => {
+      const newHidden = new Set(s.hiddenCueTypes);
+      if (newHidden.has(cueType)) {
+        newHidden.delete(cueType);
+      } else {
+        newHidden.add(cueType);
+      }
+      try {
+        localStorage.setItem("scriptus-hidden-cue-types", JSON.stringify([...newHidden]));
+      } catch {}
+      return { hiddenCueTypes: newHidden };
+    }),
+  isCueTypeVisible: (cueType) => {
+    // This is a derived value, but we need to access the store state
+    // It will be used via the store selector pattern
+    return true; // Placeholder - actual check done via selector
+  },
+
+  // Role ordering for "View as" bar
+  roleOrder: getPersistedRoleOrder(),
+  setRoleOrder: (order) => {
+    try {
+      localStorage.setItem("scriptus-role-order", JSON.stringify(order));
+    } catch {}
+    set({ roleOrder: order });
+  },
+
+  // Per-role cue bubble visibility
+  roleCueBubbles: getPersistedRoleCueBubbles(),
+  toggleRoleCueBubbles: (roleId) =>
+    set((s) => {
+      const newSet = new Set(s.roleCueBubbles);
+      if (newSet.has(roleId)) {
+        newSet.delete(roleId);
+      } else {
+        newSet.add(roleId);
+      }
+      try {
+        localStorage.setItem("scriptus-role-cue-bubbles", JSON.stringify([...newSet]));
+      } catch {}
+      return { roleCueBubbles: newSet };
+    }),
+  hasRoleCueBubbles: (roleId) => {
+    // Placeholder - actual check done via selector
+    return true;
+  },
 }));
