@@ -168,7 +168,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
         )}
 
         {activeConfig.visibleCueTypes.map((type) => {
-          const config = effCueTypes[type] || CUE_TYPES[type];
+          const config = (effCueTypes as Record<string, { color: string; bgColor: string; borderColor: string }>)[type] || (CUE_TYPES as Record<string, { color: string; bgColor: string; borderColor: string }>)[type];
           if (!config) return null;
           const isHidden = hiddenCueTypes.has(type);
           return (
