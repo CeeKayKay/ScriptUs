@@ -5,13 +5,13 @@ import { CueBadge } from "./CueBadge";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useStageStore } from "@/lib/store";
-import type { ScriptLineView, CueType, CueView, CommentView, LineType, ProjectRole } from "@/types";
+import type { ScriptLineView, CueType, CueView, CommentView, LineType } from "@/types";
 
 interface ScriptLineProps {
   line: ScriptLineView;
   visibleCueTypes: CueType[];
   activeCueId: string | null;
-  activeRole: ProjectRole;
+  activeRole: string;
   onCueClick: (cue: CueView) => void;
   onAddCue?: (lineId: string, selectedText?: string) => void;
   onAddComment?: (lineId: string, selectedText?: string) => void;
@@ -105,7 +105,7 @@ function CuedText({
   onCueClick: (cue: CueView) => void;
   style?: React.CSSProperties;
   tag?: "span" | "div";
-  activeRole?: ProjectRole;
+  activeRole?: string;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
   onAddComment?: (lineId: string, selectedText?: string) => void;
@@ -953,7 +953,7 @@ function EditableCuedText({
   style?: React.CSSProperties;
   focusStyle?: React.CSSProperties;
   multiline?: boolean;
-  activeRole?: ProjectRole;
+  activeRole?: string;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
   onAddComment?: (lineId: string, selectedText?: string) => void;
@@ -1021,7 +1021,7 @@ function EditableCuedText({
 
 // ---- Inline editable text component ----
 
-function getSelectionCueLabel(role: ProjectRole): { label: string; color: string } | null {
+function getSelectionCueLabel(role: string): { label: string; color: string } | null {
   switch (role) {
     case "LIGHTING":
       return { label: "+ cue", color: "var(--stage-gold)" };
@@ -1072,7 +1072,7 @@ function EditableText({
   onTyping?: (value: string) => void;
   autoFocus?: boolean;
   clickPos?: { x: number; y: number } | null;
-  activeRole?: ProjectRole;
+  activeRole?: string;
   lineId?: string;
   onAddCue?: (lineId: string, selectedText?: string) => void;
   onAddComment?: (lineId: string, selectedText?: string) => void;
