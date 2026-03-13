@@ -56,7 +56,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
     // Check if it's a custom role
     const customRole = customRoles.find((r) => r.id === activeRole);
     if (customRole) {
-      // First, check if there's a custom cue type associated with this custom role
+      // First, check if there's a custom cue type associated with this custom role (by ID or name)
       const associatedCustomCueType = customCueTypes.find(
         (ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name
       );
@@ -64,10 +64,22 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         return associatedCustomCueType.type as CueType;
       }
 
+      // For existing custom roles without an associated cue type, look for a cue type
+      // that matches the role name (converted to cue type format)
+      const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
+      const matchingCueType = customCueTypes.find((ct) => ct.type === expectedTypeKey);
+      if (matchingCueType) {
+        return matchingCueType.type as CueType;
+      }
+
       // Otherwise, use the first visible cue type for this role
       if (customRole.visibleCueTypes && customRole.visibleCueTypes.length > 0) {
         return customRole.visibleCueTypes[0] as CueType;
       }
+
+      // Last resort for custom roles: return the role name as a type key
+      // This allows the label to be generated correctly even without a formal cue type
+      return expectedTypeKey as CueType;
     }
 
     return "LIGHT";
@@ -114,15 +126,18 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   // Preserves any user-typed suffix after the Q number
   useEffect(() => {
     const config = effCueTypes[type];
+    // For custom roles without a formal cue type, generate label from type key
+    // e.g., "PYRO_TECH" -> "PT" (initials)
+    const fallbackLabel = config?.label || type.split("_").map(w => w[0]).join("");
     setLabel((prev) => {
-      if (!prev) return `${config.label} Q${number}`;
+      if (!prev) return `${fallbackLabel} Q${number}`;
       // Match pattern like "PROP Q3 - Gummy Worm" → replace Q3 with Q{number}
       const match = prev.match(/^(\S+\s+Q)\d+(\s*.*)$/);
       if (match) return `${match[1]}${number}${match[2]}`;
       // No match (user cleared label or typed something custom) — generate fresh
-      return `${config.label} Q${number}`;
+      return `${fallbackLabel} Q${number}`;
     });
-  }, [type, number]);
+  }, [type, number, effCueTypes]);
 
   const handleSave = async () => {
     setSaving(true);
