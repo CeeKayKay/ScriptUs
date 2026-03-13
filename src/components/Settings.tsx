@@ -144,7 +144,10 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     setRoleError(null);
 
     try {
-      // Create the custom role
+      // Generate the cue type key upfront so we can include it in visibleCueTypes
+      const cueTypeKey = newRoleName.trim().toUpperCase().replace(/\s+/g, "_");
+
+      // Create the custom role with the cue type already in visibleCueTypes
       const res = await fetch(`/api/projects/${projectId}/roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -152,7 +155,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           name: newRoleName.trim(),
           icon: newRoleIcon,
           color: newRoleColor,
-          visibleCueTypes: [],
+          visibleCueTypes: [cueTypeKey],
         }),
       });
 
@@ -166,7 +169,6 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
 
       // Also create a corresponding custom cue type for this role
       if (newRoleId) {
-        const cueTypeKey = newRoleName.trim().toUpperCase().replace(/\s+/g, "_");
         const cueLabel = newRoleName.trim().split(" ").map(w => w[0]).join("").toUpperCase() || "CUE";
 
         await fetch(`/api/projects/${projectId}/cue-types`, {

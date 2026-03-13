@@ -1735,8 +1735,19 @@ function SceneTextBox({
 
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
-    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
-  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
+    const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+    // Merge in custom cue types
+    const merged: Record<string, { color: string; bgColor: string; borderColor: string; label?: string }> = { ...builtIn };
+    customCueTypes.forEach((ct) => {
+      merged[ct.type] = {
+        color: ct.color,
+        bgColor: ct.bgColor,
+        borderColor: ct.borderColor,
+        label: ct.label,
+      };
+    });
+    return merged;
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight, customCueTypes]);
 
   // Determine cue button label based on role
   const cueButtonLabel = useMemo(() => {

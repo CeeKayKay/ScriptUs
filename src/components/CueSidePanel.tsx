@@ -24,6 +24,7 @@ export function CueSidePanel() {
     cueTypeColorOverridesLight,
     hiddenCueTypes,
     customRoles,
+    customCueTypes,
   } = useStageStore();
 
   // Get role config - check built-in roles first, then custom roles
@@ -46,8 +47,19 @@ export function CueSidePanel() {
   const isMobile = useIsMobile();
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
-    return getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
-  }, [cueTypeColorOverrides, cueTypeColorOverridesLight]);
+    const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
+    // Merge in custom cue types
+    const merged: Record<string, { color: string; bgColor: string; borderColor: string; label?: string }> = { ...builtIn };
+    customCueTypes.forEach((ct) => {
+      merged[ct.type] = {
+        color: ct.color,
+        bgColor: ct.bgColor,
+        borderColor: ct.borderColor,
+        label: ct.label,
+      };
+    });
+    return merged;
+  }, [cueTypeColorOverrides, cueTypeColorOverridesLight, customCueTypes]);
 
   const [expandedCueId, setExpandedCueId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -60,9 +72,29 @@ export function CueSidePanel() {
     const result: (CueView & { sceneName: string })[] = [];
 
     // For Stage Manager, filter out user-hidden cue types
-    const effectiveVisibleTypes = activeRole === "STAGE_MANAGER"
+    let effectiveVisibleTypes = activeRole === "STAGE_MANAGER"
       ? roleConfig.visibleCueTypes.filter((t) => !hiddenCueTypes.has(t))
-      : roleConfig.visibleCueTypes;
+      : [...roleConfig.visibleCueTypes];
+
+    // For custom roles, also include custom cue types associated with this role
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      // Find custom cue types associated with this role
+      const associatedCueTypes = customCueTypes
+        .filter((ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
+        .map((ct) => ct.type);
+      // Also check for cue type matching role name pattern
+      const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
+      if (!effectiveVisibleTypes.includes(expectedTypeKey)) {
+        effectiveVisibleTypes.push(expectedTypeKey);
+      }
+      // Add associated cue types
+      associatedCueTypes.forEach((t) => {
+        if (!effectiveVisibleTypes.includes(t)) {
+          effectiveVisibleTypes.push(t);
+        }
+      });
+    }
 
     scenes.forEach((scene) => {
       scene.lines.forEach((line) => {
@@ -87,7 +119,7 @@ export function CueSidePanel() {
     });
 
     return result;
-  }, [scenes, roleConfig, activeRole, hiddenCueTypes]);
+  }, [scenes, roleConfig, activeRole, hiddenCueTypes, customRoles, customCueTypes]);
 
   const handleCueClick = (cue: CueView) => {
     setExpandedCueId(expandedCueId === cue.id ? null : cue.id);
