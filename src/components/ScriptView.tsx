@@ -1989,10 +1989,11 @@ function SceneTextBox({
     if (!yText || !yDoc || !synced) return;
 
     // Initialize from DB if Y.Text is empty (first user to connect)
+    // Use sceneRef.current to avoid re-running effect when cues are added to lines
     if (!initializedRef.current) {
       initializedRef.current = true;
-      if (yText.length === 0 && scene.lines.length > 0) {
-        const dbText = normalizeSceneText(linesToText(scene.lines));
+      if (yText.length === 0 && sceneRef.current.lines.length > 0) {
+        const dbText = normalizeSceneText(linesToText(sceneRef.current.lines));
         if (dbText) {
           yDoc.transact(() => {
             yText.insert(0, dbText);
@@ -2113,7 +2114,7 @@ function SceneTextBox({
 
     yText.observe(observer);
     return () => yText.unobserve(observer);
-  }, [yText, yDoc, synced, scene.lines]);
+  }, [yText, yDoc, synced]);
 
   // Handle local input: compute diff and apply to Y.Text
   const handleInput = useCallback(() => {
