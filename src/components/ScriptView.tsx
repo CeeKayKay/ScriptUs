@@ -1707,13 +1707,22 @@ function SceneTextBox({
   // Build mapping from custom cue types to their associated roles
   const customCueTypeToRole = useMemo(() => {
     const mapping: Record<string, string> = {};
+    // Add mappings from custom cue types
     for (const ct of customCueTypes) {
       if (ct.associatedRole) {
         mapping[ct.type] = ct.associatedRole;
       }
     }
+    // Also add mappings for custom roles based on their name pattern
+    // This ensures bubbles work even if custom cue type wasn't created
+    for (const cr of customRoles) {
+      const expectedTypeKey = cr.name.toUpperCase().replace(/\s+/g, "_");
+      if (!mapping[expectedTypeKey]) {
+        mapping[expectedTypeKey] = cr.id;
+      }
+    }
     return mapping;
-  }, [customCueTypes]);
+  }, [customCueTypes, customRoles]);
 
   // Get role config - check built-in roles first, then custom roles
   const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
@@ -1939,7 +1948,24 @@ function SceneTextBox({
     if (!rawText && !sceneCues.length && !selectedCommentRef) return displayHtml;
     const text = rawText || "";
     if (!text) return displayHtml;
-    const allVisibleTypes = (roleConfig?.visibleCueTypes || []) as CueType[];
+    let allVisibleTypes = [...(roleConfig?.visibleCueTypes || [])] as string[];
+
+    // For custom roles, also include the expected type key and associated cue types
+    const customRole = customRoles.find((r) => r.id === activeRole);
+    if (customRole) {
+      const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
+      if (!allVisibleTypes.includes(expectedTypeKey)) {
+        allVisibleTypes.push(expectedTypeKey);
+      }
+      // Also include associated custom cue types
+      const associatedTypes = customCueTypes
+        .filter((ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
+        .map((ct) => ct.type);
+      associatedTypes.forEach((t) => {
+        if (!allVisibleTypes.includes(t)) allVisibleTypes.push(t);
+      });
+    }
+
     // For Stage Manager, filter out user-hidden cue types
     const visibleTypes = activeRole === "STAGE_MANAGER"
       ? allVisibleTypes.filter((t) => !hiddenCueTypes.has(t))
@@ -1948,8 +1974,8 @@ function SceneTextBox({
       sceneCues.some((c) => c.scriptRef && visibleTypes.includes(c.type) && text.includes(c.scriptRef)) ||
       (selectedCommentRef && text.includes(selectedCommentRef));
     if (!hasAnnotations) return displayHtml;
-    return textToDisplayHtml(text, sceneCues, visibleTypes, selectedCommentRef, sideBubbleDir, effCueTypes, roleCueBubbles, customCueTypeToRole);
-  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir, effCueTypes, activeRole, hiddenCueTypes, roleCueBubbles, customCueTypeToRole]);
+    return textToDisplayHtml(text, sceneCues, visibleTypes as CueType[], selectedCommentRef, sideBubbleDir, effCueTypes, roleCueBubbles, customCueTypeToRole);
+  }, [rawText, displayHtml, sceneCues, selectedCommentRef, roleConfig, sideBubbleDir, effCueTypes, activeRole, hiddenCueTypes, roleCueBubbles, customCueTypeToRole, customRoles, customCueTypes]);
 
   // Get Y.Text for this scene
   const yText = useMemo(

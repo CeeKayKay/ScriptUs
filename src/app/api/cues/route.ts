@@ -36,7 +36,32 @@ export async function POST(req: NextRequest) {
   };
 
   const allowed = new Set(membership.roles.flatMap((r: string) => rolePermissions[r] || []));
-  if (!allowed.has(body.type)) {
+
+  // Check if cue type is allowed for built-in roles
+  let isAllowed = allowed.has(body.type);
+
+  // If not allowed by built-in roles, check if it's a custom cue type
+  if (!isAllowed) {
+    // Stage manager can create any cue type including custom ones
+    if (membership.roles.includes("STAGE_MANAGER")) {
+      isAllowed = true;
+    } else {
+      // Check if there's a custom cue type that matches and is associated with a custom role
+      const customCueType = await prisma.customCueType.findFirst({
+        where: {
+          projectId: body.projectId,
+          type: body.type,
+        },
+      });
+
+      if (customCueType) {
+        // Custom cue type exists - allow it (the custom role system handles permissions)
+        isAllowed = true;
+      }
+    }
+  }
+
+  if (!isAllowed) {
     return NextResponse.json(
       { error: `Your roles cannot create ${body.type} cues` },
       { status: 403 }
