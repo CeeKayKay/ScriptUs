@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     if (membership.roles.includes("STAGE_MANAGER")) {
       isAllowed = true;
     } else {
-      // Check if there's a custom cue type that matches and is associated with a custom role
+      // Check if there's a custom cue type that matches
       const customCueType = await prisma.customCueType.findFirst({
         where: {
           projectId: body.projectId,
@@ -55,8 +55,22 @@ export async function POST(req: NextRequest) {
       });
 
       if (customCueType) {
-        // Custom cue type exists - allow it (the custom role system handles permissions)
+        // Custom cue type exists - allow it
         isAllowed = true;
+      } else {
+        // Also check if there's a custom role whose name matches the cue type pattern
+        // This handles older custom roles that don't have a corresponding custom cue type
+        const customRoles = await prisma.customRole.findMany({
+          where: { projectId: body.projectId },
+        });
+
+        const matchingRole = customRoles.find(
+          (role) => role.name.toUpperCase().replace(/\s+/g, "_") === body.type
+        );
+
+        if (matchingRole) {
+          isAllowed = true;
+        }
       }
     }
   }
