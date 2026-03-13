@@ -13,7 +13,8 @@ export type ProjectRole =
   | "WRITER"
   | "VIEWER";
 
-export type CueType =
+// Built-in cue types - custom cue types are also supported as strings
+export type BuiltInCueType =
   | "LIGHT"
   | "SOUND"
   | "PROPS"
@@ -22,6 +23,9 @@ export type CueType =
   | "PROJECTION"
   | "FLY"
   | "SPOT";
+
+// CueType can be a built-in type or a custom string (e.g., "PYRO_TECH")
+export type CueType = BuiltInCueType | (string & {});
 
 export type CueStatus = "DRAFT" | "REVIEW" | "APPROVED" | "LOCKED";
 

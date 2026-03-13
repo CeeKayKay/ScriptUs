@@ -202,7 +202,7 @@ model Cue {
   projectId   String
   sceneId     String
   lineId      String?   // Linked script line (null = scene-level cue)
-  type        CueType
+  type        String    // Cue type - supports built-in (LIGHT, SOUND, etc.) and custom types
   label       String    // e.g. "LX Q1", "SND Q5"
   number      Float     // Cue number (float for inserting between: 1, 1.5, 2)
   note        String    @db.Text
