@@ -749,7 +749,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   } = useStageStore();
 
   // Use selector with array conversion for proper reactivity with Set
-  const roleCueBubblesArray = useStageStore((s) => [...s.roleCueBubbles]);
+  const roleCueBubblesArray = useStageStore((s) => Array.from(s.roleCueBubbles));
   const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
 
   const projectId = projectIdProp || storeProjectId;
@@ -1684,7 +1684,7 @@ function SceneTextBox({
   const customRoles = useStageStore((s) => s.customRoles);
   const customCueTypes = useStageStore((s) => s.customCueTypes);
   // Use selector with array conversion for proper reactivity with Set
-  const roleCueBubblesArray = useStageStore((s) => [...s.roleCueBubbles]);
+  const roleCueBubblesArray = useStageStore((s) => Array.from(s.roleCueBubbles));
   const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
 
   // Build mapping from custom cue types to their associated roles
