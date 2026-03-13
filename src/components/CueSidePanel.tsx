@@ -72,7 +72,8 @@ export function CueSidePanel() {
     const result: (CueView & { sceneName: string })[] = [];
 
     // For Stage Manager, filter out user-hidden cue types
-    let effectiveVisibleTypes = activeRole === "STAGE_MANAGER"
+    // Use string[] to allow custom cue types alongside built-in CueType
+    let effectiveVisibleTypes: string[] = activeRole === "STAGE_MANAGER"
       ? roleConfig.visibleCueTypes.filter((t) => !hiddenCueTypes.has(t))
       : [...roleConfig.visibleCueTypes];
 
