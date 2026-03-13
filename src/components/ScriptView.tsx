@@ -118,17 +118,34 @@ function linesToText(lines: ScriptLineView[]): string {
 }
 
 /** Check if a line starts with a character name prefix followed by dialogue text.
- *  Returns the character name portion or null. e.g. "JOHN Hello" → "JOHN" */
+ *  Returns the full prefix portion (including colon/spaces) or null.
+ *  e.g. "JOHN:  Hello" → "JOHN:  ", "MARY  Hi" → "MARY  " */
 function extractCharacterPrefix(line: string): string | null {
-  // Match ALL_CAPS word(s) at start, followed by a space and optional text
-  const match = line.match(/^([A-Z][A-Z\s\-'\.]+?)\s{2,}(.+)$/) ||
-                line.match(/^([A-Z][A-Z\-'\.]+)\s(.*)$/);
-  if (!match) return null;
-  const name = match[1].trim();
-  if (name.length === 0 || name.length >= 40) return null;
-  if (["THE END", "BLACKOUT", "LIGHTS UP", "CURTAIN", "INTERMISSION", "PROLOGUE", "EPILOGUE", "ACT", "SCENE"].includes(name)) return null;
-  if (!/^[A-Z][A-Z\s\-'\.]+$/.test(name)) return null;
-  return name;
+  // Match ALL_CAPS word(s) at start, followed by:
+  // - A colon (with optional spaces after), OR
+  // - Two or more spaces (intentional separation)
+  // This avoids false positives on regular sentences starting with caps words
+  const colonMatch = line.match(/^([A-Z][A-Z\s\-'\.]+?)(:\s*)(.*)$/);
+  if (colonMatch) {
+    const name = colonMatch[1].trim();
+    if (name.length === 0 || name.length >= 40) return null;
+    if (["THE END", "BLACKOUT", "LIGHTS UP", "CURTAIN", "INTERMISSION", "PROLOGUE", "EPILOGUE", "ACT", "SCENE"].includes(name)) return null;
+    if (!/^[A-Z][A-Z\s\-'\.]+$/.test(name)) return null;
+    // Return the full prefix including colon and spaces for correct substring
+    return colonMatch[1] + colonMatch[2];
+  }
+
+  const spaceMatch = line.match(/^([A-Z][A-Z\s\-'\.]+?)(\s{2,})(.+)$/);
+  if (spaceMatch) {
+    const name = spaceMatch[1].trim();
+    if (name.length === 0 || name.length >= 40) return null;
+    if (["THE END", "BLACKOUT", "LIGHTS UP", "CURTAIN", "INTERMISSION", "PROLOGUE", "EPILOGUE", "ACT", "SCENE"].includes(name)) return null;
+    if (!/^[A-Z][A-Z\s\-'\.]+$/.test(name)) return null;
+    // Return the full prefix including spaces for correct substring
+    return spaceMatch[1] + spaceMatch[2];
+  }
+
+  return null;
 }
 
 /** Convert plain text to HTML with character name detection (for Y.Text rendering) */
@@ -142,7 +159,7 @@ function textToHtml(text: string): string {
       const charPrefix = extractCharacterPrefix(line);
       if (charPrefix) {
         const rest = line.substring(charPrefix.length);
-        const c = escapeHtml(charPrefix);
+        const c = escapeHtml(charPrefix.trim().replace(/:$/, "")); // Remove trailing colon for display
         return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
       }
       // Full line is a character name (standalone, no trailing space)
@@ -508,7 +525,7 @@ function textToDisplayHtml(
       if (annotated) {
         const charPrefix = extractCharacterPrefix(line);
         if (charPrefix) {
-          const c = escapeHtml(charPrefix);
+          const c = escapeHtml(charPrefix.trim().replace(/:$/, "")); // Remove trailing colon for display
           // Re-annotate only the dialogue portion after the prefix
           const dialoguePart = line.substring(charPrefix.length);
           const dialogueAnnotated = annotateLine(dialoguePart, activeCues, selectedCommentRef, sideBubbleDir, effectiveCueTypes, roleCueBubbles, customCueTypeToRole);
@@ -527,7 +544,7 @@ function textToDisplayHtml(
       const charPrefix = extractCharacterPrefix(line);
       if (charPrefix) {
         const rest = line.substring(charPrefix.length);
-        const c = escapeHtml(charPrefix);
+        const c = escapeHtml(charPrefix.trim().replace(/:$/, "")); // Remove trailing colon for display
         return `<div data-character="${c}"><span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}</div>`;
       }
       if (isCharacterName(line)) {
@@ -1990,7 +2007,8 @@ function SceneTextBox({
         const charPrefix = extractCharacterPrefix(line);
         if (charPrefix) {
           const rest = line.substring(charPrefix.length);
-          return `<span style="${CHAR_NAME_STYLE}">${escapeHtml(charPrefix)}</span>${escapeHtml(rest)}`;
+          const c = escapeHtml(charPrefix.trim().replace(/:$/, "")); // Remove trailing colon for display
+          return `<span style="${CHAR_NAME_STYLE}">${c}</span>${escapeHtml(rest)}`;
         }
         if (isCharacterName(line)) {
           const trimmed = line.trim();
@@ -2032,7 +2050,7 @@ function SceneTextBox({
               if (isCharacterName(expectedText)) {
                 oldEl.setAttribute("data-character", escapeHtml(expectedText.trim()));
               } else if (charPrefix) {
-                oldEl.setAttribute("data-character", escapeHtml(charPrefix));
+                oldEl.setAttribute("data-character", escapeHtml(charPrefix.trim().replace(/:$/, "")));
               } else {
                 oldEl.removeAttribute("data-character");
               }
@@ -2048,7 +2066,7 @@ function SceneTextBox({
           if (isCharacterName(expectedText)) {
             div.setAttribute("data-character", escapeHtml(expectedText.trim()));
           } else if (charPrefix) {
-            div.setAttribute("data-character", escapeHtml(charPrefix));
+            div.setAttribute("data-character", escapeHtml(charPrefix.trim().replace(/:$/, "")));
           }
           div.innerHTML = buildLineHtml(expectedText);
           editor.appendChild(div);
