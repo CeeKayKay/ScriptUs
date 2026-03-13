@@ -144,6 +144,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     setRoleError(null);
 
     try {
+      // Create the custom role
       const res = await fetch(`/api/projects/${projectId}/roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,6 +159,28 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to create role");
+      }
+
+      const roleData = await res.json();
+      const newRoleId = roleData.role?.id;
+
+      // Also create a corresponding custom cue type for this role
+      if (newRoleId) {
+        const cueTypeKey = newRoleName.trim().toUpperCase().replace(/\s+/g, "_");
+        const cueLabel = newRoleName.trim().split(" ").map(w => w[0]).join("").toUpperCase() || "CUE";
+
+        await fetch(`/api/projects/${projectId}/cue-types`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: cueTypeKey,
+            label: cueLabel,
+            color: newRoleColor,
+            bgColor: `${newRoleColor}14`,
+            borderColor: `${newRoleColor}40`,
+            associatedRole: newRoleId,
+          }),
+        });
       }
 
       setNewRoleName("");

@@ -447,6 +447,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
               Cue Type
             </label>
             <div className="flex flex-wrap gap-1.5">
+              {/* Built-in cue types */}
               {CUE_TYPE_LIST.map((ct) => (
                 <button
                   key={ct.type}
@@ -454,6 +455,33 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                     setType(ct.type);
                     if (!isEditing) {
                       const nextNum = getNextNumber(ct.type);
+                      setNumber(nextNum);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded transition-all"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 22,
+                    fontWeight: type === ct.type ? 700 : 400,
+                    color: type === ct.type ? ct.color : "var(--stage-dim)",
+                    background:
+                      type === ct.type ? ct.color + "15" : "transparent",
+                    border: `1px solid ${
+                      type === ct.type ? ct.color + "40" : "var(--stage-border-subtle)"
+                    }`,
+                  }}
+                >
+                  {ct.label}
+                </button>
+              ))}
+              {/* Custom cue types */}
+              {customCueTypes.map((ct) => (
+                <button
+                  key={ct.type}
+                  onClick={() => {
+                    setType(ct.type as CueType);
+                    if (!isEditing) {
+                      const nextNum = getNextNumber(ct.type as CueType);
                       setNumber(nextNum);
                     }
                   }}
