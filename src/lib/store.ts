@@ -475,7 +475,7 @@ export const useStageStore = create<StageStore>((set) => ({
         newHidden.add(cueType);
       }
       try {
-        localStorage.setItem("scriptus-hidden-cue-types", JSON.stringify([...newHidden]));
+        localStorage.setItem("scriptus-hidden-cue-types", JSON.stringify(Array.from(newHidden)));
       } catch {}
       return { hiddenCueTypes: newHidden };
     }),
@@ -505,7 +505,7 @@ export const useStageStore = create<StageStore>((set) => ({
         newSet.add(roleId);
       }
       try {
-        localStorage.setItem("scriptus-role-cue-bubbles", JSON.stringify([...newSet]));
+        localStorage.setItem("scriptus-role-cue-bubbles", JSON.stringify(Array.from(newSet)));
       } catch {}
       return { roleCueBubbles: newSet };
     }),
