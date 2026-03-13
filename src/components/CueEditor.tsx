@@ -61,6 +61,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         (ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name
       );
       if (associatedCustomCueType) {
+        console.log("[CueEditor] Using associated custom cue type:", associatedCustomCueType.type);
         return associatedCustomCueType.type as CueType;
       }
 
@@ -69,16 +70,19 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
       const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
       const matchingCueType = customCueTypes.find((ct) => ct.type === expectedTypeKey);
       if (matchingCueType) {
+        console.log("[CueEditor] Using matching cue type:", matchingCueType.type);
         return matchingCueType.type as CueType;
       }
 
       // Otherwise, use the first visible cue type for this role
       if (customRole.visibleCueTypes && customRole.visibleCueTypes.length > 0) {
+        console.log("[CueEditor] Using first visible cue type:", customRole.visibleCueTypes[0]);
         return customRole.visibleCueTypes[0] as CueType;
       }
 
       // Last resort for custom roles: return the role name as a type key
       // This allows the label to be generated correctly even without a formal cue type
+      console.log("[CueEditor] Using expected type key (last resort):", expectedTypeKey);
       return expectedTypeKey as CueType;
     }
 
@@ -181,6 +185,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
 
       const data = await res.json();
       const savedCue = data.cue;
+      console.log("[CueEditor] Saved cue:", { requestType: type, savedType: savedCue.type, savedCue });
 
       // Update the store with the new/updated cue
       if (isEditing) {
