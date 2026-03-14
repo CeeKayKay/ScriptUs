@@ -89,6 +89,14 @@ export function CueSidePanel() {
       if (!effectiveVisibleTypes.includes(expectedTypeKey)) {
         effectiveVisibleTypes.push(expectedTypeKey);
       }
+      // Check for built-in type that closely matches (e.g., "PROJECTIONS" -> "PROJECTION")
+      const builtInTypes = ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION", "FLY", "SPOT"];
+      const matchingBuiltIn = builtInTypes.find(
+        (bt) => expectedTypeKey.startsWith(bt) || bt.startsWith(expectedTypeKey.replace(/S$/, ""))
+      );
+      if (matchingBuiltIn && !effectiveVisibleTypes.includes(matchingBuiltIn)) {
+        effectiveVisibleTypes.push(matchingBuiltIn);
+      }
       // Add associated cue types
       associatedCueTypes.forEach((t) => {
         if (!effectiveVisibleTypes.includes(t)) {

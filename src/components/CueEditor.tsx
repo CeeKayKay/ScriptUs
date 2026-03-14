@@ -80,8 +80,17 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         return customRole.visibleCueTypes[0] as CueType;
       }
 
+      // Check if there's a built-in type that closely matches (e.g., "PROJECTIONS" -> "PROJECTION")
+      const builtInTypes = ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION", "FLY", "SPOT"];
+      const matchingBuiltIn = builtInTypes.find(
+        (bt) => expectedTypeKey.startsWith(bt) || bt.startsWith(expectedTypeKey.replace(/S$/, ""))
+      );
+      if (matchingBuiltIn) {
+        console.log("[CueEditor] Using matching built-in type:", matchingBuiltIn);
+        return matchingBuiltIn as CueType;
+      }
+
       // Last resort for custom roles: return the role name as a type key
-      // This allows the label to be generated correctly even without a formal cue type
       console.log("[CueEditor] Using expected type key (last resort):", expectedTypeKey);
       return expectedTypeKey as CueType;
     }

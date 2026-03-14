@@ -1957,6 +1957,14 @@ function SceneTextBox({
       if (!allVisibleTypes.includes(expectedTypeKey)) {
         allVisibleTypes.push(expectedTypeKey);
       }
+      // Check for built-in type that closely matches (e.g., "PROJECTIONS" -> "PROJECTION")
+      const builtInTypes = ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION", "FLY", "SPOT"];
+      const matchingBuiltIn = builtInTypes.find(
+        (bt) => expectedTypeKey.startsWith(bt) || bt.startsWith(expectedTypeKey.replace(/S$/, ""))
+      );
+      if (matchingBuiltIn && !allVisibleTypes.includes(matchingBuiltIn)) {
+        allVisibleTypes.push(matchingBuiltIn);
+      }
       // Also include associated custom cue types
       const associatedTypes = customCueTypes
         .filter((ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
