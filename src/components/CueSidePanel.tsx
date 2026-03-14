@@ -105,14 +105,12 @@ export function CueSidePanel() {
       });
     });
     if (customRole) {
-      console.log("[CueSidePanel Debug]", {
-        activeRole,
-        customRoleName: customRole.name,
-        expectedTypeKey: customRole.name.toUpperCase().replace(/\s+/g, "_"),
-        effectiveVisibleTypes,
-        allCueTypesInProject: Array.from(allCueTypes),
-        customCueTypes: customCueTypes.map(ct => ({ type: ct.type, associatedRole: ct.associatedRole })),
-      });
+      console.log("[CueSidePanel Debug] activeRole:", activeRole);
+      console.log("[CueSidePanel Debug] customRoleName:", customRole.name);
+      console.log("[CueSidePanel Debug] expectedTypeKey:", customRole.name.toUpperCase().replace(/\s+/g, "_"));
+      console.log("[CueSidePanel Debug] effectiveVisibleTypes:", JSON.stringify(effectiveVisibleTypes));
+      console.log("[CueSidePanel Debug] allCueTypesInProject:", JSON.stringify(Array.from(allCueTypes)));
+      console.log("[CueSidePanel Debug] customCueTypes:", JSON.stringify(customCueTypes.map(ct => ({ type: ct.type, associatedRole: ct.associatedRole }))));
     }
 
     scenes.forEach((scene) => {
