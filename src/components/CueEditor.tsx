@@ -243,7 +243,10 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         method: "DELETE",
       });
 
-      if (!res.ok) {
+      // Handle both successful delete (200) and "cue not found" (404) - in both cases remove from local store
+      const shouldRemoveFromStore = res.ok || res.status === 404;
+
+      if (!shouldRemoveFromStore) {
         const data = await res.json();
         throw new Error(data.error || "Failed to delete");
       }
@@ -254,23 +257,25 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         broadcast?.({ type: "cue-delete", sceneId: editingCue.sceneId, lineId: editingCue.lineId, cueId: editingCue.id });
       }
 
-      // Renumber remaining cues of same type
-      const remaining: string[] = [];
-      scenes.forEach((sc) =>
-        sc.lines.forEach((l) =>
-          l.cues
-            .filter((c) => c.type === editingCue.type && c.id !== editingCue.id)
-            .sort((a, b) => a.number - b.number)
-            .forEach((c) => remaining.push(c.id))
-        )
-      );
-      if (remaining.length > 0) {
-        reorderCuesInStore(editingCue.type, remaining);
-        fetch("/api/cues/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cues: remaining.map((id, idx) => ({ id, number: idx + 1 })) }),
-        });
+      // Renumber remaining cues of same type (only if delete was successful in DB)
+      if (res.ok) {
+        const remaining: string[] = [];
+        scenes.forEach((sc) =>
+          sc.lines.forEach((l) =>
+            l.cues
+              .filter((c) => c.type === editingCue.type && c.id !== editingCue.id)
+              .sort((a, b) => a.number - b.number)
+              .forEach((c) => remaining.push(c.id))
+          )
+        );
+        if (remaining.length > 0) {
+          reorderCuesInStore(editingCue.type, remaining);
+          fetch("/api/cues/reorder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cues: remaining.map((id, idx) => ({ id, number: idx + 1 })) }),
+          });
+        }
       }
 
       closeCueEditor();

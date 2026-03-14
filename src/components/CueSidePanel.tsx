@@ -255,7 +255,10 @@ export function CueSidePanel() {
     setDeleting(cue.id);
     try {
       const res = await fetch(`/api/cues?id=${cue.id}`, { method: "DELETE" });
-      if (res.ok) {
+      // Handle both successful delete (200) and "cue not found" (404) - in both cases remove from local store
+      const shouldRemoveFromStore = res.ok || res.status === 404;
+
+      if (shouldRemoveFromStore) {
         // Remove from store — try lineId first, then scan all lines in the scene
         if (cue.lineId && cue.sceneId) {
           removeCueFromLine(cue.sceneId, cue.lineId, cue.id);
@@ -274,22 +277,24 @@ export function CueSidePanel() {
         setExpandedCueId(null);
         setConfirmDeleteId(null);
 
-        // Renumber remaining cues of the same type
-        const remaining = cues
-          .filter((c) => c.id !== cue.id && c.type === cue.type)
-          .sort((a, b) => a.number - b.number);
+        // Renumber remaining cues of the same type (only if delete was successful in DB)
+        if (res.ok) {
+          const remaining = cues
+            .filter((c) => c.id !== cue.id && c.type === cue.type)
+            .sort((a, b) => a.number - b.number);
 
-        if (remaining.length > 0) {
-          const newOrder = remaining.map((c) => c.id);
-          reorderCuesInStore(cue.type, newOrder);
+          if (remaining.length > 0) {
+            const newOrder = remaining.map((c) => c.id);
+            reorderCuesInStore(cue.type, newOrder);
 
-          // Persist renumber to API
-          const updates = newOrder.map((id, idx) => ({ id, number: idx + 1 }));
-          await fetch("/api/cues/reorder", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cues: updates }),
-          });
+            // Persist renumber to API
+            const updates = newOrder.map((id, idx) => ({ id, number: idx + 1 }));
+            await fetch("/api/cues/reorder", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cues: updates }),
+            });
+          }
         }
       }
     } catch (err) {

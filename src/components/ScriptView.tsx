@@ -1704,7 +1704,7 @@ function SceneTextBox({
   const roleCueBubblesArray = useStageStore((s) => Array.from(s.roleCueBubbles));
   const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
 
-  // Build mapping from custom cue types to their associated roles
+  // Build mapping from cue types to their associated custom roles
   const customCueTypeToRole = useMemo(() => {
     const mapping: Record<string, string> = {};
     // Add mappings from custom cue types
@@ -1719,6 +1719,13 @@ function SceneTextBox({
       const expectedTypeKey = cr.name.toUpperCase().replace(/\s+/g, "_");
       if (!mapping[expectedTypeKey]) {
         mapping[expectedTypeKey] = cr.id;
+      }
+      // Also map any built-in cue types in this role's visibleCueTypes to this role
+      // This handles cases like a "Projections" role that uses built-in "PROJECTION" type
+      for (const cueType of cr.visibleCueTypes || []) {
+        if (!mapping[cueType]) {
+          mapping[cueType] = cr.id;
+        }
       }
     }
     return mapping;
