@@ -147,6 +147,15 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
       // Generate the cue type key upfront so we can include it in visibleCueTypes
       const cueTypeKey = newRoleName.trim().toUpperCase().replace(/\s+/g, "_");
 
+      // Check if this matches or closely matches a built-in cue type
+      const builtInTypes = ["LIGHT", "SOUND", "PROPS", "SET", "BLOCKING", "PROJECTION", "FLY", "SPOT"];
+      const matchingBuiltIn = builtInTypes.find(
+        (bt) => bt === cueTypeKey || cueTypeKey.startsWith(bt) || bt.startsWith(cueTypeKey.replace(/S$/, ""))
+      );
+
+      // Use the matching built-in type if found, otherwise use the generated key
+      const effectiveCueType = matchingBuiltIn || cueTypeKey;
+
       // Create the custom role with the cue type already in visibleCueTypes
       const res = await fetch(`/api/projects/${projectId}/roles`, {
         method: "POST",
@@ -155,7 +164,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
           name: newRoleName.trim(),
           icon: newRoleIcon,
           color: newRoleColor,
-          visibleCueTypes: [cueTypeKey],
+          visibleCueTypes: [effectiveCueType],
         }),
       });
 
@@ -167,8 +176,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
       const roleData = await res.json();
       const newRoleId = roleData.role?.id;
 
-      // Also create a corresponding custom cue type for this role
-      if (newRoleId) {
+      // Only create a custom cue type if there's no matching built-in type
+      if (newRoleId && !matchingBuiltIn) {
         const cueLabel = newRoleName.trim().split(" ").map(w => w[0]).join("").toUpperCase() || "CUE";
 
         await fetch(`/api/projects/${projectId}/cue-types`, {

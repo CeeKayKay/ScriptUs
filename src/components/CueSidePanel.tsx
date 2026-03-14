@@ -105,22 +105,6 @@ export function CueSidePanel() {
       });
     }
 
-    // Debug: log all cue types in the project
-    const allCueTypes = new Set<string>();
-    scenes.forEach((scene) => {
-      scene.lines.forEach((line) => {
-        line.cues.forEach((c) => allCueTypes.add(c.type));
-      });
-    });
-    if (customRole) {
-      console.log("[CueSidePanel Debug] activeRole:", activeRole);
-      console.log("[CueSidePanel Debug] customRoleName:", customRole.name);
-      console.log("[CueSidePanel Debug] expectedTypeKey:", customRole.name.toUpperCase().replace(/\s+/g, "_"));
-      console.log("[CueSidePanel Debug] effectiveVisibleTypes:", JSON.stringify(effectiveVisibleTypes));
-      console.log("[CueSidePanel Debug] allCueTypesInProject:", JSON.stringify(Array.from(allCueTypes)));
-      console.log("[CueSidePanel Debug] customCueTypes:", JSON.stringify(customCueTypes.map(ct => ({ type: ct.type, associatedRole: ct.associatedRole }))));
-    }
-
     scenes.forEach((scene) => {
       scene.lines.forEach((line) => {
         line.cues
