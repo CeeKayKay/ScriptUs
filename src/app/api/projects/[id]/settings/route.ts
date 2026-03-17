@@ -27,7 +27,7 @@ export async function GET(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { smtpUser: true, smtpPass: true, cueTypeColors: true, cueTypeColorsLight: true },
+    select: { smtpUser: true, smtpPass: true, cueTypeColors: true, cueTypeColorsLight: true, cueNumberingSettings: true },
   });
 
   return NextResponse.json({
@@ -35,6 +35,7 @@ export async function GET(
     smtpConfigured: !!project?.smtpPass,
     cueTypeColors: project?.cueTypeColors || {},
     cueTypeColorsLight: project?.cueTypeColorsLight || {},
+    cueNumberingSettings: project?.cueNumberingSettings || {},
   });
 }
 
@@ -65,6 +66,7 @@ export async function PATCH(
   if (body.smtpPass !== undefined) data.smtpPass = body.smtpPass || null;
   if (body.cueTypeColors !== undefined) data.cueTypeColors = body.cueTypeColors;
   if (body.cueTypeColorsLight !== undefined) data.cueTypeColorsLight = body.cueTypeColorsLight;
+  if (body.cueNumberingSettings !== undefined) data.cueNumberingSettings = body.cueNumberingSettings;
 
   await prisma.project.update({
     where: { id: projectId },

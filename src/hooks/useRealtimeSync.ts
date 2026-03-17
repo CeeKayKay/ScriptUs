@@ -73,8 +73,8 @@ export function useRealtimeSync(doc: Y.Doc | null, userId: string) {
                   s.updateSceneTitle(msg.lineId, msg.value);
                 } else {
                   // Find which scene this line belongs to
-                  const scene = s.scenes.find((sc) =>
-                    sc.lines.some((l) => l.id === msg.lineId)
+                  const scene = s.scenes.find((sc: SceneView) =>
+                    sc.lines.some((l: ScriptLineView) => l.id === msg.lineId)
                   );
                   if (scene) {
                     const updates: Partial<ScriptLineView> =

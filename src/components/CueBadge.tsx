@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useStageStore } from "@/lib/store";
+import { useStageStore, type StageStore } from "@/lib/store";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import type { CueView } from "@/types";
 
@@ -13,8 +13,8 @@ interface CueBadgeProps {
 }
 
 export function CueBadge({ cue, isActive, onClick, compact }: CueBadgeProps) {
-  const overrides = useStageStore((s) => s.cueTypeColorOverrides);
-  const overridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
+  const overrides = useStageStore((s: StageStore) => s.cueTypeColorOverrides);
+  const overridesLight = useStageStore((s: StageStore) => s.cueTypeColorOverridesLight);
   const effCueTypes = useMemo(() => {
     const t = getCurrentTheme();
     return getEffectiveCueTypes(t === "light" ? overridesLight : overrides);

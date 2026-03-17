@@ -94,6 +94,7 @@ export async function GET(
     })),
     cueTypeColors: project.cueTypeColors as Record<string, string> | null,
     cueTypeColorsLight: project.cueTypeColorsLight as Record<string, string> | null,
+    cueNumberingSettings: project.cueNumberingSettings as Record<string, { format: string; nextValue: number }> | null,
     customCueTypes: project.customCueTypes.map((ct) => ({
       id: ct.id,
       type: ct.type,

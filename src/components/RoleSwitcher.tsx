@@ -5,7 +5,7 @@ import { useStageStore } from "@/lib/store";
 import { ROLES, ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { ProjectRole } from "@/types";
+import type { ProjectRole, CustomRoleView } from "@/types";
 
 interface RoleSwitcherProps {
   myRoles: ProjectRole[];
@@ -29,7 +29,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
       visibleCueTypes: r.visibleCueTypes,
       isCustom: false,
     }));
-    const custom = customRoles.map((r) => ({
+    const custom = customRoles.map((r: CustomRoleView) => ({
       id: r.id,
       label: r.name,
       icon: r.icon,
@@ -41,10 +41,10 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
 
     // Sort by roleOrder if set
     if (roleOrder.length === 0) return combined;
-    const orderMap = new Map(roleOrder.map((id, idx) => [id, idx]));
+    const orderMap = new Map<string, number>(roleOrder.map((id: string, idx: number) => [id, idx] as [string, number]));
     return [...combined].sort((a, b) => {
-      const aIdx = orderMap.get(a.id) ?? Infinity;
-      const bIdx = orderMap.get(b.id) ?? Infinity;
+      const aIdx: number = orderMap.get(a.id) ?? Infinity;
+      const bIdx: number = orderMap.get(b.id) ?? Infinity;
       if (aIdx === Infinity && bIdx === Infinity) {
         // Both not in order, keep original order
         return combined.indexOf(a) - combined.indexOf(b);
@@ -58,7 +58,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
     if (ROLES[activeRole as ProjectRole]) {
       return ROLES[activeRole as ProjectRole];
     }
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       return {
         id: customRole.id,
@@ -167,7 +167,7 @@ export function RoleSwitcher({ myRoles }: RoleSwitcherProps) {
           </span>
         )}
 
-        {activeConfig.visibleCueTypes.map((type) => {
+        {activeConfig.visibleCueTypes.map((type: string) => {
           const config = (effCueTypes as Record<string, { color: string; bgColor: string; borderColor: string; label: string }>)[type] || (CUE_TYPES as Record<string, { color: string; bgColor: string; borderColor: string; label: string }>)[type];
           if (!config) return null;
           const isHidden = hiddenCueTypes.has(type);

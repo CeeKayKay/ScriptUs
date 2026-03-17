@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStageStore } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { CommentView } from "@/types";
+import type { CommentView, SceneView, ScriptLineView } from "@/types";
 
 interface CommentWithContext extends CommentView {
   sceneName: string;
@@ -29,9 +29,9 @@ export function CommentSidePanel({ projectId }: { projectId: string }) {
 
   const comments = useMemo(() => {
     const result: CommentWithContext[] = [];
-    scenes.forEach((scene) => {
-      scene.lines.forEach((line) => {
-        (line.comments || []).forEach((c) => {
+    scenes.forEach((scene: SceneView) => {
+      scene.lines.forEach((line: ScriptLineView) => {
+        (line.comments || []).forEach((c: CommentView) => {
           result.push({
             ...c,
             sceneName: `Act ${scene.act}, Sc ${scene.scene}`,

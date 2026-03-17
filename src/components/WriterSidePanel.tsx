@@ -215,7 +215,7 @@ export function WriterSidePanel() {
           title="Move to group"
         >
           <option value="">Ungrouped</option>
-          {characterGroups.map((g) => (
+          {characterGroups.map((g: CharacterGroupView) => (
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
         </select>
@@ -338,7 +338,7 @@ export function WriterSidePanel() {
                 }}
               >
                 <option value="">No group</option>
-                {characterGroups.map((g) => (
+                {characterGroups.map((g: CharacterGroupView) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
@@ -396,7 +396,7 @@ export function WriterSidePanel() {
             )}
 
             {/* Groups */}
-            {characterGroups.map((group) => (
+            {characterGroups.map((group: CharacterGroupView) => (
               <div key={group.id}>
                 <div className="flex items-center justify-between mb-1 group/grp">
                   {editingGroupId === group.id ? (
@@ -523,7 +523,7 @@ export function WriterSidePanel() {
             </div>
 
             {/* Location list */}
-            {locations.map((loc) => (
+            {locations.map((loc: LocationView) => (
               <div
                 key={loc.id}
                 className="group/loc flex items-center justify-between py-2 px-2 rounded hover:bg-white/5 transition-colors"

@@ -5,7 +5,7 @@ import { useStageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { CueView } from "@/types";
+import type { CueView, CustomRoleView, CustomCueTypeView, SceneView, ScriptLineView } from "@/types";
 
 export function CueSidePanel() {
   const {
@@ -29,7 +29,7 @@ export function CueSidePanel() {
 
   // Get role config - check built-in roles first, then custom roles
   const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       return {
         id: customRole.id,
@@ -50,7 +50,7 @@ export function CueSidePanel() {
     const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
     // Merge in custom cue types
     const merged: Record<string, { color: string; bgColor: string; borderColor: string; label?: string }> = { ...builtIn };
-    customCueTypes.forEach((ct) => {
+    customCueTypes.forEach((ct: CustomCueTypeView) => {
       merged[ct.type] = {
         color: ct.color,
         bgColor: ct.bgColor,
@@ -78,12 +78,12 @@ export function CueSidePanel() {
       : [...roleConfig.visibleCueTypes];
 
     // For custom roles, also include custom cue types associated with this role
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       // Find custom cue types associated with this role
       const associatedCueTypes = customCueTypes
-        .filter((ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
-        .map((ct) => ct.type);
+        .filter((ct: CustomCueTypeView) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
+        .map((ct: CustomCueTypeView) => ct.type);
       // Also check for cue type matching role name pattern
       const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
       if (!effectiveVisibleTypes.includes(expectedTypeKey)) {
@@ -98,18 +98,18 @@ export function CueSidePanel() {
         effectiveVisibleTypes.push(matchingBuiltIn);
       }
       // Add associated cue types
-      associatedCueTypes.forEach((t) => {
+      associatedCueTypes.forEach((t: string) => {
         if (!effectiveVisibleTypes.includes(t)) {
           effectiveVisibleTypes.push(t);
         }
       });
     }
 
-    scenes.forEach((scene) => {
-      scene.lines.forEach((line) => {
+    scenes.forEach((scene: SceneView) => {
+      scene.lines.forEach((line: ScriptLineView) => {
         line.cues
-          .filter((c) => effectiveVisibleTypes.includes(c.type))
-          .forEach((cue) => {
+          .filter((c: CueView) => effectiveVisibleTypes.includes(c.type))
+          .forEach((cue: CueView) => {
             result.push({
               ...cue,
               sceneName: `Act ${scene.act}, Sc ${scene.scene}`,
@@ -264,10 +264,10 @@ export function CueSidePanel() {
           removeCueFromLine(cue.sceneId, cue.lineId, cue.id);
         } else if (cue.sceneId) {
           // Cue might not have lineId — remove from any line in the scene
-          const scene = scenes.find((s) => s.id === cue.sceneId);
+          const scene = scenes.find((s: SceneView) => s.id === cue.sceneId);
           if (scene) {
             for (const line of scene.lines) {
-              if (line.cues.some((c) => c.id === cue.id)) {
+              if (line.cues.some((c: CueView) => c.id === cue.id)) {
                 removeCueFromLine(cue.sceneId, line.id, cue.id);
                 break;
               }

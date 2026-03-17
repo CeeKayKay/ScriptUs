@@ -3,7 +3,15 @@ import type { ProjectRole, CueType, CueView, SceneView, ScriptLineView, MemberVi
 
 type CuePanelSide = "left" | "right";
 
-interface StageStore {
+// Cue numbering format settings per cue type
+export type CueNumberFormat = "numbers" | "letters";
+export interface CueNumberingSetting {
+  format: CueNumberFormat;
+  nextValue: number; // Always stored as a number, converted to letter for display
+}
+export type CueNumberingSettings = Record<string, CueNumberingSetting>;
+
+export interface StageStore {
   // Current user context (can be built-in ProjectRole or custom role ID)
   activeRole: string;
   setActiveRole: (role: string) => void;
@@ -21,6 +29,13 @@ interface StageStore {
   setCueTypeColorOverrides: (overrides: Record<string, string>) => void;
   setCueTypeColorOverridesLight: (overrides: Record<string, string>) => void;
   setCueTypeColorOverride: (cueType: string, color: string, theme: "dark" | "light") => void;
+
+  // Cue numbering settings per cue type
+  cueNumberingSettings: CueNumberingSettings;
+  setCueNumberingSettings: (settings: CueNumberingSettings) => void;
+  updateCueNumberingSetting: (cueType: string, setting: Partial<CueNumberingSetting>) => void;
+  getNextCueValue: (cueType: string) => { value: number; display: string };
+  incrementCueCounter: (cueType: string) => void;
   setProject: (data: {
     id: string;
     title: string;
@@ -30,6 +45,7 @@ interface StageStore {
     customCueTypes?: CustomCueTypeView[];
     cueTypeColors?: Record<string, string> | null;
     cueTypeColorsLight?: Record<string, string> | null;
+    cueNumberingSettings?: CueNumberingSettings | null;
   }) => void;
 
   // UI state
@@ -212,7 +228,27 @@ function getPersistedRoleCueBubbles(): Set<string> {
   return new Set(["STAGE_MANAGER", "LIGHTING", "SOUND"]);
 }
 
-export const useStageStore = create<StageStore>((set) => ({
+// Helper function to convert a number to letter sequence (1=A, 2=B, ..., 26=Z, 27=AA)
+export function numberToLetters(n: number): string {
+  let result = "";
+  while (n > 0) {
+    n--; // Adjust for 0-based
+    result = String.fromCharCode(65 + (n % 26)) + result;
+    n = Math.floor(n / 26);
+  }
+  return result || "A";
+}
+
+// Helper function to convert letter sequence to number (A=1, B=2, ..., Z=26, AA=27)
+export function lettersToNumber(letters: string): number {
+  let result = 0;
+  for (let i = 0; i < letters.length; i++) {
+    result = result * 26 + (letters.charCodeAt(i) - 64);
+  }
+  return result || 1;
+}
+
+export const useStageStore = create<StageStore>((set, get) => ({
   // Defaults
   activeRole: getPersistedActiveRole(),
   setActiveRole: (role) => {
@@ -237,7 +273,48 @@ export const useStageStore = create<StageStore>((set) => ({
       ? { cueTypeColorOverridesLight: { ...s.cueTypeColorOverridesLight, [cueType]: color } }
       : { cueTypeColorOverrides: { ...s.cueTypeColorOverrides, [cueType]: color } }
     ),
-  setProject: ({ id, title, scenes, members, customRoles, customCueTypes, cueTypeColors, cueTypeColorsLight }) =>
+
+  // Cue numbering settings
+  cueNumberingSettings: {},
+  setCueNumberingSettings: (settings) => set({ cueNumberingSettings: settings }),
+  updateCueNumberingSetting: (cueType, setting) =>
+    set((s) => ({
+      cueNumberingSettings: {
+        ...s.cueNumberingSettings,
+        [cueType]: {
+          format: s.cueNumberingSettings[cueType]?.format || "numbers",
+          nextValue: s.cueNumberingSettings[cueType]?.nextValue || 1,
+          ...setting,
+        },
+      },
+    })),
+  getNextCueValue: (cueType) => {
+    const state = get();
+    const setting = state.cueNumberingSettings[cueType] || { format: "numbers", nextValue: 1 };
+    const value = setting.nextValue;
+    let display: string;
+    if (setting.format === "letters") {
+      display = numberToLetters(value);
+    } else {
+      display = String(value);
+    }
+    return { value, display };
+  },
+  incrementCueCounter: (cueType) =>
+    set((s) => {
+      const current = s.cueNumberingSettings[cueType] || { format: "numbers", nextValue: 1 };
+      return {
+        cueNumberingSettings: {
+          ...s.cueNumberingSettings,
+          [cueType]: {
+            ...current,
+            nextValue: current.nextValue + 1,
+          },
+        },
+      };
+    }),
+
+  setProject: ({ id, title, scenes, members, customRoles, customCueTypes, cueTypeColors, cueTypeColorsLight, cueNumberingSettings }) =>
     set({
       projectId: id,
       projectTitle: title,
@@ -247,6 +324,7 @@ export const useStageStore = create<StageStore>((set) => ({
       customCueTypes: customCueTypes || [],
       cueTypeColorOverrides: (cueTypeColors as Record<string, string>) || {},
       cueTypeColorOverridesLight: (cueTypeColorsLight as Record<string, string>) || {},
+      cueNumberingSettings: (cueNumberingSettings as CueNumberingSettings) || {},
     }),
 
   activeCueId: null,

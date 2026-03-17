@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { signOut } from "next-auth/react";
-import { useStageStore } from "@/lib/store";
+import { useStageStore, type StageStore } from "@/lib/store";
 import { ROLE_LIST } from "@/lib/roles";
 import { CUE_TYPE_LIST, CUE_TYPES, getEffectiveCueTypes } from "@/lib/cue-types";
+import { numberToLetters, type CueNumberFormat, type CueNumberingSettings } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTheme } from "@/hooks/useTheme";
-import type { ProjectRole, CustomRoleView, CustomCueTypeView } from "@/types";
+import type { ProjectRole, CustomRoleView, CustomCueTypeView, MemberView } from "@/types";
 
 interface SettingsProps {
   projectId: string;
@@ -59,6 +60,9 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     setCueTypeColorOverride,
     roleOrder,
     setRoleOrder,
+    cueNumberingSettings,
+    setCueNumberingSettings,
+    updateCueNumberingSetting,
   } = useStageStore();
 
   const { theme, toggleTheme } = useTheme();
@@ -101,6 +105,49 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
   const effectiveCueTypesLight = getEffectiveCueTypes(cueTypeColorOverridesLight);
   // Show colors for current theme
   const effectiveCueTypes = theme === "light" ? effectiveCueTypesLight : effectiveCueTypesDark;
+
+  // --- Cue numbering settings ---
+  const [numberingSettingsSaving, setNumberingSettingsSaving] = useState(false);
+
+  const handleNumberingFormatChange = async (cueType: string, format: CueNumberFormat) => {
+    setNumberingSettingsSaving(true);
+    try {
+      const currentSetting = cueNumberingSettings[cueType] || { format: "numbers", nextValue: 1 };
+      const newSettings: CueNumberingSettings = {
+        ...cueNumberingSettings,
+        [cueType]: { ...currentSetting, format },
+      };
+      const res = await fetch(`/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cueNumberingSettings: newSettings }),
+      });
+      if (res.ok) {
+        updateCueNumberingSetting(cueType, { format });
+      }
+    } catch {}
+    setNumberingSettingsSaving(false);
+  };
+
+  const handleNumberingValueChange = async (cueType: string, nextValue: number) => {
+    setNumberingSettingsSaving(true);
+    try {
+      const currentSetting = cueNumberingSettings[cueType] || { format: "numbers", nextValue: 1 };
+      const newSettings: CueNumberingSettings = {
+        ...cueNumberingSettings,
+        [cueType]: { ...currentSetting, nextValue },
+      };
+      const res = await fetch(`/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cueNumberingSettings: newSettings }),
+      });
+      if (res.ok) {
+        updateCueNumberingSetting(cueType, { nextValue });
+      }
+    } catch {}
+    setNumberingSettingsSaving(false);
+  };
 
   // --- SMTP state ---
   const [smtpUser, setSmtpUser] = useState("");
@@ -466,8 +513,8 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
     if (roles.length === 0) return;
     const prev = localMembers;
     // Optimistic update
-    setLocalMembers((members) =>
-      members.map((m) => (m.id === memberId ? { ...m, roles } : m))
+    setLocalMembers((members: MemberView[]) =>
+      members.map((m: MemberView) => (m.id === memberId ? { ...m, roles } : m))
     );
     try {
       const res = await fetch(`/api/projects/${projectId}/invites`, {
@@ -493,7 +540,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
         body: JSON.stringify({ memberId, action: "remove" }),
       });
       if (res.ok) {
-        setLocalMembers((prev) => prev.filter((m) => m.id !== memberId));
+        setLocalMembers((prev: MemberView[]) => prev.filter((m: MemberView) => m.id !== memberId));
       }
     } catch {}
   };
@@ -819,7 +866,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               <div>
                 <div className="mb-2" style={labelStyle}>Members</div>
                 <div className="space-y-2">
-                  {localMembers.map((m) => (
+                  {localMembers.map((m: MemberView) => (
                     <div
                       key={m.id}
                       className="px-4 py-3 rounded-lg"
@@ -987,6 +1034,137 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               >
                 Manage cue types for this project.
               </p>
+
+              {/* Cue Numbering Settings */}
+              <div>
+                <div
+                  className="mb-2"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 13,
+                    color: "var(--stage-text)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Cue Numbering
+                </div>
+                <p
+                  className="mb-3"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 13,
+                    color: "var(--stage-dim)",
+                  }}
+                >
+                  Choose numbers (1, 2, 3...) or letters (A, B, C...) for each cue type. The counter remembers the next value.
+                </p>
+                <div className="space-y-2">
+                  {[...CUE_TYPE_LIST, ...customCueTypes.map((ct: CustomCueTypeView) => ({ type: ct.type, label: ct.label, color: ct.color }))].map((ct: { type: string; label: string; color: string }) => {
+                    const setting = cueNumberingSettings[ct.type] || { format: "numbers" as CueNumberFormat, nextValue: 1 };
+                    const nextDisplay = setting.format === "letters" ? numberToLetters(setting.nextValue) : String(setting.nextValue);
+                    return (
+                      <div
+                        key={ct.type}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg"
+                        style={{
+                          background: "var(--stage-line-hover)",
+                          border: "1px solid var(--stage-border)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "DM Mono, monospace",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: ct.color,
+                            minWidth: 60,
+                          }}
+                        >
+                          {ct.label}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleNumberingFormatChange(ct.type, "numbers")}
+                            disabled={numberingSettingsSaving}
+                            className="px-2.5 py-1 rounded transition-all"
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 12,
+                              fontWeight: setting.format === "numbers" ? 700 : 400,
+                              color: setting.format === "numbers" ? "var(--stage-gold)" : "var(--stage-dim)",
+                              background: setting.format === "numbers" ? "var(--stage-gold-bg)" : "transparent",
+                              border: `1px solid ${setting.format === "numbers" ? "var(--stage-gold-border)" : "var(--stage-border-subtle)"}`,
+                              opacity: numberingSettingsSaving ? 0.5 : 1,
+                            }}
+                          >
+                            1, 2, 3...
+                          </button>
+                          <button
+                            onClick={() => handleNumberingFormatChange(ct.type, "letters")}
+                            disabled={numberingSettingsSaving}
+                            className="px-2.5 py-1 rounded transition-all"
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 12,
+                              fontWeight: setting.format === "letters" ? 700 : 400,
+                              color: setting.format === "letters" ? "var(--stage-gold)" : "var(--stage-dim)",
+                              background: setting.format === "letters" ? "var(--stage-gold-bg)" : "transparent",
+                              border: `1px solid ${setting.format === "letters" ? "var(--stage-gold-border)" : "var(--stage-border-subtle)"}`,
+                              opacity: numberingSettingsSaving ? 0.5 : 1,
+                            }}
+                          >
+                            A, B, C...
+                          </button>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2">
+                          <span
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 11,
+                              color: "var(--stage-muted)",
+                            }}
+                          >
+                            Next:
+                          </span>
+                          <input
+                            type={setting.format === "numbers" ? "number" : "text"}
+                            value={setting.format === "letters" ? numberToLetters(setting.nextValue) : setting.nextValue}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              let numVal: number;
+                              if (setting.format === "letters") {
+                                // Convert letters to number
+                                const letters = val.toUpperCase().replace(/[^A-Z]/g, "");
+                                if (!letters) return;
+                                numVal = 0;
+                                for (let i = 0; i < letters.length; i++) {
+                                  numVal = numVal * 26 + (letters.charCodeAt(i) - 64);
+                                }
+                              } else {
+                                numVal = parseInt(val) || 1;
+                              }
+                              if (numVal < 1) numVal = 1;
+                              handleNumberingValueChange(ct.type, numVal);
+                            }}
+                            className="w-14 px-2 py-1 rounded text-center"
+                            style={{
+                              fontFamily: "DM Mono, monospace",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: ct.color,
+                              background: "var(--stage-bg)",
+                              border: "1px solid var(--stage-border)",
+                              outline: "none",
+                            }}
+                            min={1}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Built-in cue types */}
               <div>
@@ -1226,7 +1404,7 @@ export function Settings({ projectId, myRoles }: SettingsProps) {
               {/* Existing custom cue types */}
               {customCueTypes.length > 0 && (
                 <div className="space-y-2">
-                  {customCueTypes.map((ct) =>
+                  {customCueTypes.map((ct: CustomCueTypeView) =>
                     editingCueTypeId === ct.id ? (
                       <CueTypeEditForm
                         key={ct.id}
@@ -1806,8 +1984,8 @@ function RolesTabContent({
   handleAddRole: () => void;
 }) {
   // Cue bubble settings from store
-  const roleCueBubbles = useStageStore((s) => s.roleCueBubbles);
-  const toggleRoleCueBubbles = useStageStore((s) => s.toggleRoleCueBubbles);
+  const roleCueBubbles = useStageStore((s: StageStore) => s.roleCueBubbles);
+  const toggleRoleCueBubbles = useStageStore((s: StageStore) => s.toggleRoleCueBubbles);
 
   // Light theme color overrides for built-in roles
   const lightAlt: Record<string, string> = {

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useStageStore } from "@/lib/store";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useStageStore, numberToLetters, lettersToNumber, type CueNumberFormat } from "@/lib/store";
 import { CUE_TYPES, CUE_TYPE_LIST, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { CueType, CueStatus } from "@/types";
+import type { CueType, CueStatus, CustomCueTypeView, CustomRoleView, SceneView, ScriptLineView, CueView } from "@/types";
 
 interface CueEditorProps {
   projectId: string;
@@ -12,7 +12,7 @@ interface CueEditorProps {
 }
 
 export function CueEditor({ projectId, broadcast }: CueEditorProps) {
-  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore, cueTypeColorOverrides, cueTypeColorOverridesLight, customRoles, customCueTypes } = useStageStore();
+  const { editingCue, closeCueEditor, scenes, activeRole, newCueLineId, newCueSceneId, newCueSelectedText, addCueToLine, updateCueInStore, removeCueFromLine, reorderCuesInStore, cueTypeColorOverrides, cueTypeColorOverridesLight, customRoles, customCueTypes, cueNumberingSettings, updateCueNumberingSetting } = useStageStore();
   const isEditing = !!editingCue;
   const isMobile = useIsMobile();
   const effCueTypes = useMemo(() => {
@@ -20,7 +20,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
     const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
     // Merge in custom cue types
     const merged: Record<string, { type: string; label: string; color: string; bgColor: string; borderColor: string; associatedRole: string }> = { ...builtIn };
-    customCueTypes.forEach((ct) => {
+    customCueTypes.forEach((ct: CustomCueTypeView) => {
       merged[ct.type] = {
         type: ct.type,
         label: ct.label,
@@ -54,11 +54,11 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
     }
 
     // Check if it's a custom role
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       // First, check if there's a custom cue type associated with this custom role (by ID or name)
       const associatedCustomCueType = customCueTypes.find(
-        (ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name
+        (ct: CustomCueTypeView) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name
       );
       if (associatedCustomCueType) {
         return associatedCustomCueType.type as CueType;
@@ -67,7 +67,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
       // For existing custom roles without an associated cue type, look for a cue type
       // that matches the role name (converted to cue type format)
       const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
-      const matchingCueType = customCueTypes.find((ct) => ct.type === expectedTypeKey);
+      const matchingCueType = customCueTypes.find((ct: CustomCueTypeView) => ct.type === expectedTypeKey);
       if (matchingCueType) {
         return matchingCueType.type as CueType;
       }
@@ -93,18 +93,40 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
     return "LIGHT";
   };
 
+  // Get the numbering format for a cue type
+  const getNumberingFormat = useCallback((cueType: string): CueNumberFormat => {
+    return cueNumberingSettings[cueType]?.format || "numbers";
+  }, [cueNumberingSettings]);
+
   // Auto-calculate next cue number for a given type
-  const getNextNumber = (cueType: CueType): number => {
+  // Uses the stored nextValue if available, otherwise calculates from existing cues
+  const getNextNumber = useCallback((cueType: CueType): number => {
+    // First check if we have a stored next value
+    const storedSetting = cueNumberingSettings[cueType];
+    if (storedSetting?.nextValue !== undefined) {
+      return storedSetting.nextValue;
+    }
+
+    // Fallback: calculate from existing cues
     let maxNum = 0;
-    scenes.forEach((sc) =>
-      sc.lines.forEach((l) =>
-        l.cues.forEach((c) => {
+    scenes.forEach((sc: SceneView) =>
+      sc.lines.forEach((l: ScriptLineView) =>
+        l.cues.forEach((c: CueView) => {
           if (c.type === cueType && c.number > maxNum) maxNum = c.number;
         })
       )
     );
     return Math.floor(maxNum) + 1;
-  };
+  }, [scenes, cueNumberingSettings]);
+
+  // Format a cue number for display (number or letter)
+  const formatCueNumber = useCallback((cueType: string, num: number): string => {
+    const format = getNumberingFormat(cueType);
+    if (format === "letters") {
+      return numberToLetters(Math.floor(num));
+    }
+    return String(num);
+  }, [getNumberingFormat]);
 
   const initialType = defaultType();
   const [type, setType] = useState<CueType>(initialType);
@@ -131,21 +153,22 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
   })();
 
   // Auto-generate or update label when type/number changes
-  // Preserves any user-typed suffix after the Q number
+  // Preserves any user-typed suffix after the Q number/letter
   useEffect(() => {
     const config = effCueTypes[type];
     // For custom roles without a formal cue type, generate label from type key
     // e.g., "PYRO_TECH" -> "PT" (initials)
     const fallbackLabel = config?.label || type.split("_").map(w => w[0]).join("");
-    setLabel((prev) => {
-      if (!prev) return `${fallbackLabel} Q${number}`;
-      // Match pattern like "PROP Q3 - Gummy Worm" → replace Q3 with Q{number}
-      const match = prev.match(/^(\S+\s+Q)\d+(\s*.*)$/);
-      if (match) return `${match[1]}${number}${match[2]}`;
+    const formattedNum = formatCueNumber(type, number);
+    setLabel((prev: string) => {
+      if (!prev) return `${fallbackLabel} Q${formattedNum}`;
+      // Match pattern like "PROP Q3 - Gummy Worm" or "PROP QA - Gummy Worm" → replace with new value
+      const match = prev.match(/^(\S+\s+Q)[\dA-Z]+(\s*.*)$/);
+      if (match) return `${match[1]}${formattedNum}${match[2]}`;
       // No match (user cleared label or typed something custom) — generate fresh
-      return `${fallbackLabel} Q${number}`;
+      return `${fallbackLabel} Q${formattedNum}`;
     });
-  }, [type, number, effCueTypes]);
+  }, [type, number, effCueTypes, formatCueNumber]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -225,6 +248,25 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
         };
         addCueToLine(sceneId, lineId, newCue);
         broadcast?.({ type: "cue-add", sceneId, lineId, cue: newCue });
+
+        // Update the cue numbering counter for this type
+        const currentSetting = cueNumberingSettings[type] || { format: "numbers", nextValue: number };
+        const newNextValue = Math.floor(number) + 1;
+        const newSettings = {
+          ...cueNumberingSettings,
+          [type]: {
+            format: currentSetting.format,
+            nextValue: newNextValue,
+          },
+        };
+        updateCueNumberingSetting(type, { nextValue: newNextValue });
+
+        // Persist the updated counter to the server
+        fetch(`/api/projects/${projectId}/settings`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cueNumberingSettings: newSettings }),
+        }).catch(() => {}); // Silent fail - local state is updated anyway
       }
 
       closeCueEditor();
@@ -260,12 +302,12 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
       // Renumber remaining cues of same type (only if delete was successful in DB)
       if (res.ok) {
         const remaining: string[] = [];
-        scenes.forEach((sc) =>
-          sc.lines.forEach((l) =>
+        scenes.forEach((sc: SceneView) =>
+          sc.lines.forEach((l: ScriptLineView) =>
             l.cues
-              .filter((c) => c.type === editingCue.type && c.id !== editingCue.id)
-              .sort((a, b) => a.number - b.number)
-              .forEach((c) => remaining.push(c.id))
+              .filter((c: CueView) => c.type === editingCue.type && c.id !== editingCue.id)
+              .sort((a: CueView, b: CueView) => a.number - b.number)
+              .forEach((c: CueView) => remaining.push(c.id))
           )
         );
         if (remaining.length > 0) {
@@ -503,7 +545,7 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                 </button>
               ))}
               {/* Custom cue types */}
-              {customCueTypes.map((ct) => (
+              {customCueTypes.map((ct: CustomCueTypeView) => (
                 <button
                   key={ct.type}
                   onClick={() => {
@@ -573,24 +615,47 @@ export function CueEditor({ projectId, broadcast }: CueEditorProps) {
                   textTransform: "uppercase",
                 }}
               >
-                Cue #
+                Cue {getNumberingFormat(type) === "letters" ? "Letter" : "#"}
               </label>
-              <input
-                type="number"
-                value={number}
-                onChange={(e) => setNumber(parseFloat(e.target.value) || 0)}
-                step={0.1}
-                min={0}
-                className="w-full px-3 py-2 rounded"
-                style={{
-                  fontFamily: "DM Mono, monospace",
-                  fontSize: 26,
-                  background: "var(--stage-bg)",
-                  border: "1px solid var(--stage-border)",
-                  color: "var(--stage-text)",
-                  outline: "none",
-                }}
-              />
+              {getNumberingFormat(type) === "letters" ? (
+                <input
+                  type="text"
+                  value={numberToLetters(Math.floor(number))}
+                  onChange={(e) => {
+                    const letters = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+                    if (!letters) return;
+                    const numVal = lettersToNumber(letters);
+                    setNumber(numVal);
+                  }}
+                  className="w-full px-3 py-2 rounded text-center"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 26,
+                    background: "var(--stage-bg)",
+                    border: "1px solid var(--stage-border)",
+                    color: "var(--stage-text)",
+                    outline: "none",
+                    textTransform: "uppercase",
+                  }}
+                />
+              ) : (
+                <input
+                  type="number"
+                  value={number}
+                  onChange={(e) => setNumber(parseFloat(e.target.value) || 0)}
+                  step={0.1}
+                  min={0}
+                  className="w-full px-3 py-2 rounded"
+                  style={{
+                    fontFamily: "DM Mono, monospace",
+                    fontSize: 26,
+                    background: "var(--stage-bg)",
+                    border: "1px solid var(--stage-border)",
+                    color: "var(--stage-text)",
+                    outline: "none",
+                  }}
+                />
+              )}
             </div>
           </div>
 

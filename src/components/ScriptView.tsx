@@ -2,12 +2,12 @@
 
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import * as Y from "yjs";
-import { useStageStore } from "@/lib/store";
+import { useStageStore, type StageStore } from "@/lib/store";
 import { ROLES } from "@/lib/roles";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ScriptLine } from "./ScriptLine";
-import type { CueView, ScriptLineView, LineType, SceneView, CueType } from "@/types";
+import type { CueView, ScriptLineView, LineType, SceneView, CueType, CustomRoleView, CustomCueTypeView } from "@/types";
 
 interface ScriptViewProps {
   broadcast?: (msg: any) => void;
@@ -766,15 +766,15 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   } = useStageStore();
 
   // Use selector with array conversion for proper reactivity with Set
-  const roleCueBubblesArray = useStageStore((s) => Array.from(s.roleCueBubbles));
-  const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
+  const roleCueBubblesArray = useStageStore((s: StageStore) => Array.from(s.roleCueBubbles) as string[]);
+  const roleCueBubbles = useMemo(() => new Set<string>(roleCueBubblesArray), [roleCueBubblesArray]);
 
   const projectId = projectIdProp || storeProjectId;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Get role config - check built-in roles first, then custom roles
   const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       return {
         id: customRole.id,
@@ -861,7 +861,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const handleUpdateCursor = useCallback(
     (lineId: string | null, field?: "text" | "character" | "title" | null) => {
       if (lineId) {
-        const scene = scenes.find((s) => s.lines.some((l) => l.id === lineId));
+        const scene = scenes.find((s: SceneView) => s.lines.some((l: ScriptLineView) => l.id === lineId));
         if (scene) lastFocusedSceneRef.current = scene.id;
       }
       updateCursor?.(lineId, field);
@@ -873,7 +873,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const handleSceneFocus = useCallback(
     (sceneId: string) => {
       lastFocusedSceneRef.current = sceneId;
-      const scene = scenes.find((s) => s.id === sceneId);
+      const scene = scenes.find((s: SceneView) => s.id === sceneId);
       if (scene && scene.lines.length > 0) {
         updateCursor?.(scene.lines[0].id, "text");
       }
@@ -941,7 +941,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const handleSaveSceneContent = useCallback(
     async (sceneId: string, content: string) => {
       if (!projectId) return;
-      const scene = scenes.find((s) => s.id === sceneId);
+      const scene = scenes.find((s: SceneView) => s.id === sceneId);
       if (!scene) return;
 
       if (scene.lines.length > 0) {
@@ -1000,7 +1000,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
     setPendingDialogue(null);
 
     const targetSceneId =
-      lastFocusedSceneRef.current && scenes.find((s) => s.id === lastFocusedSceneRef.current)
+      lastFocusedSceneRef.current && scenes.find((s: SceneView) => s.id === lastFocusedSceneRef.current)
         ? lastFocusedSceneRef.current
         : scenes[scenes.length - 1].id;
 
@@ -1128,7 +1128,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
   const handleEditSceneTitle = useCallback(
     async (sceneId: string, title: string) => {
       if (!projectId) return;
-      const prevScene = scenes.find((s) => s.id === sceneId);
+      const prevScene = scenes.find((s: SceneView) => s.id === sceneId);
       const prevTitle = prevScene?.title || "";
       try {
         const res = await fetch(`/api/projects/${projectId}/scenes`, {
@@ -1461,7 +1461,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
           </div>
         )}
 
-        {scenes.map((scene, si) => {
+        {scenes.map((scene: SceneView, si: number) => {
           const isNewAct = si === 0 || scene.act !== scenes[si - 1].act;
           const actKey = String(scene.act);
           const afterActPos = `after-act-${actKey}`;
@@ -1625,7 +1625,7 @@ export function ScriptView({ broadcast, projectId: projectIdProp, updateCursor, 
             ) : (
               <button
                 onClick={() => {
-                  const maxAct = scenes.reduce((max, s) => Math.max(max, s.act), 0);
+                  const maxAct = scenes.reduce((max: number, s: SceneView) => Math.max(max, s.act), 0);
                   setNewAct(String(maxAct + 1));
                   setNewSceneNum("1");
                   setScenePosition("new-act");
@@ -1693,16 +1693,16 @@ function SceneTextBox({
   const [commentInput, setCommentInput] = useState<{ x: number; y: number; scriptRef: string } | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const openCueEditor = useStageStore((s) => s.openCueEditor);
-  const addComment = useStageStore((s) => s.addComment);
-  const cueTypeColorOverrides = useStageStore((s) => s.cueTypeColorOverrides);
-  const cueTypeColorOverridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
-  const hiddenCueTypes = useStageStore((s) => s.hiddenCueTypes);
-  const customRoles = useStageStore((s) => s.customRoles);
-  const customCueTypes = useStageStore((s) => s.customCueTypes);
+  const openCueEditor = useStageStore((s: StageStore) => s.openCueEditor);
+  const addComment = useStageStore((s: StageStore) => s.addComment);
+  const cueTypeColorOverrides = useStageStore((s: StageStore) => s.cueTypeColorOverrides);
+  const cueTypeColorOverridesLight = useStageStore((s: StageStore) => s.cueTypeColorOverridesLight);
+  const hiddenCueTypes = useStageStore((s: StageStore) => s.hiddenCueTypes);
+  const customRoles = useStageStore((s: StageStore) => s.customRoles);
+  const customCueTypes = useStageStore((s: StageStore) => s.customCueTypes);
   // Use selector with array conversion for proper reactivity with Set
-  const roleCueBubblesArray = useStageStore((s) => Array.from(s.roleCueBubbles));
-  const roleCueBubbles = useMemo(() => new Set(roleCueBubblesArray), [roleCueBubblesArray]);
+  const roleCueBubblesArray = useStageStore((s: StageStore) => Array.from(s.roleCueBubbles) as string[]);
+  const roleCueBubbles = useMemo(() => new Set<string>(roleCueBubblesArray), [roleCueBubblesArray]);
 
   // Build mapping from cue types to their associated custom roles
   const customCueTypeToRole = useMemo(() => {
@@ -1733,7 +1733,7 @@ function SceneTextBox({
 
   // Get role config - check built-in roles first, then custom roles
   const roleConfig = ROLES[activeRole as keyof typeof ROLES] || (() => {
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       return {
         id: customRole.id,
@@ -1754,7 +1754,7 @@ function SceneTextBox({
     const builtIn = getEffectiveCueTypes(t === "light" ? cueTypeColorOverridesLight : cueTypeColorOverrides);
     // Merge in custom cue types
     const merged: Record<string, { color: string; bgColor: string; borderColor: string; label?: string }> = { ...builtIn };
-    customCueTypes.forEach((ct) => {
+    customCueTypes.forEach((ct: CustomCueTypeView) => {
       merged[ct.type] = {
         color: ct.color,
         bgColor: ct.bgColor,
@@ -1868,11 +1868,11 @@ function SceneTextBox({
   }, []);
 
   // Remote cursor indicators for this scene
-  const remoteCursors = useStageStore((s) => s.remoteCursors).filter((c) =>
-    scene.lines.some((l) => l.id === c.lineId)
+  const remoteCursors = useStageStore((s: StageStore) => s.remoteCursors).filter((c: { userId: string; name: string; color: string; lineId: string; field: "text" | "character" | "title" | null }) =>
+    scene.lines.some((l: ScriptLineView) => l.id === c.lineId)
   );
 
-  const selectedCommentRef = useStageStore((s) => s.selectedCommentRef);
+  const selectedCommentRef = useStageStore((s: StageStore) => s.selectedCommentRef);
 
   // Highlight selected comment's scriptRef in editable mode
   useEffect(() => {
@@ -1958,7 +1958,7 @@ function SceneTextBox({
     let allVisibleTypes = [...(roleConfig?.visibleCueTypes || [])] as string[];
 
     // For custom roles, also include the expected type key and associated cue types
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: CustomRoleView) => r.id === activeRole);
     if (customRole) {
       const expectedTypeKey = customRole.name.toUpperCase().replace(/\s+/g, "_");
       if (!allVisibleTypes.includes(expectedTypeKey)) {
@@ -1974,9 +1974,9 @@ function SceneTextBox({
       }
       // Also include associated custom cue types
       const associatedTypes = customCueTypes
-        .filter((ct) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
-        .map((ct) => ct.type);
-      associatedTypes.forEach((t) => {
+        .filter((ct: CustomCueTypeView) => ct.associatedRole === customRole.id || ct.associatedRole === customRole.name)
+        .map((ct: CustomCueTypeView) => ct.type);
+      associatedTypes.forEach((t: string) => {
         if (!allVisibleTypes.includes(t)) allVisibleTypes.push(t);
       });
     }

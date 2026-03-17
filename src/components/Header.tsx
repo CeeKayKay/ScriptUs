@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useStageStore } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import type { ProjectRole } from "@/types";
 
 interface HeaderProps {
   connected: boolean;
@@ -139,7 +140,7 @@ export function Header({ connected, synced }: HeaderProps) {
         )}
 
         <div className="flex -space-x-1.5">
-          {onlineUsers.slice(0, isMobile ? 3 : 6).map((user, i) => (
+          {onlineUsers.slice(0, isMobile ? 3 : 6).map((user: { userId: string; name: string; color: string; role: ProjectRole }, i: number) => (
             <div
               key={`${user.userId}-${i}`}
               data-tooltip={`${user.name} (${user.role.replace("_", " ")})`}

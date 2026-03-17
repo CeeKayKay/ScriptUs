@@ -4,7 +4,7 @@ import { forwardRef, useRef, useCallback, useState, useEffect, useMemo } from "r
 import { CueBadge } from "./CueBadge";
 import { CUE_TYPES, getEffectiveCueTypes, getCurrentTheme } from "@/lib/cue-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useStageStore } from "@/lib/store";
+import { useStageStore, type StageStore } from "@/lib/store";
 import type { ScriptLineView, CueType, CueView, CommentView, LineType } from "@/types";
 
 interface ScriptLineProps {
@@ -430,16 +430,16 @@ export const ScriptLine = forwardRef<HTMLDivElement, ScriptLineProps>(
     );
     const hasActiveCue = relevantCues.some((c) => c.id === activeCueId);
     const activeCue = relevantCues.find((c) => c.id === activeCueId);
-    const overrides = useStageStore((s) => s.cueTypeColorOverrides);
-    const overridesLight = useStageStore((s) => s.cueTypeColorOverridesLight);
+    const overrides = useStageStore((s: StageStore) => s.cueTypeColorOverrides);
+    const overridesLight = useStageStore((s: StageStore) => s.cueTypeColorOverridesLight);
     const effCueTypes = useMemo(() => {
       const t = getCurrentTheme();
       return getEffectiveCueTypes(t === "light" ? overridesLight : overrides);
     }, [overrides, overridesLight]);
     const activeCueConfig = activeCue ? (effCueTypes[activeCue.type] || CUE_TYPES[activeCue.type]) : null;
     const isMobile = useIsMobile();
-    const remoteCursors = useStageStore((s) => s.remoteCursors).filter(
-      (c) => c.lineId === line.id
+    const remoteCursors = useStageStore((s: StageStore) => s.remoteCursors).filter(
+      (c: { lineId: string }) => c.lineId === line.id
     );
 
     // --- Act Header ---

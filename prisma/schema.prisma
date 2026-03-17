@@ -92,6 +92,10 @@ model Project {
   cueTypeColors     Json? // dark theme overrides
   cueTypeColorsLight Json? // light theme overrides
 
+  // Cue numbering settings per cue type
+  // JSON object: { "LIGHT": { format: "numbers" | "letters", nextValue: 5 }, ... }
+  cueNumberingSettings Json?
+
   members        ProjectMember[]
   scenes         Scene[]
   cues           Cue[]

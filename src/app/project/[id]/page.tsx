@@ -87,6 +87,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
           customCueTypes: data.customCueTypes || [],
           cueTypeColors: data.cueTypeColors || null,
           cueTypeColorsLight: data.cueTypeColorsLight || null,
+          cueNumberingSettings: data.cueNumberingSettings || null,
         });
         setMyRoles(data.myRoles || [data.myRole] || ["VIEWER"]);
         setLoading(false);
@@ -135,7 +136,7 @@ export default function ProjectPage({ params: paramsPromise }: PageProps) {
 
   // Get role config - check built-in roles first, then custom roles
   const roleConfig = ROLES[activeRole as ProjectRole] || (() => {
-    const customRole = customRoles.find((r) => r.id === activeRole);
+    const customRole = customRoles.find((r: { id: string }) => r.id === activeRole);
     if (customRole) {
       return {
         id: customRole.id,
